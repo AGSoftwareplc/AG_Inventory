@@ -496,6 +496,62 @@ class ShopTest(unittest.TestCase):
         self.post('/branch', {'branch': '1'}, once=False)  # not his branch: ignored
         self.assertNotIn('Main branch', self.c.get('/').data.decode().split('</header>')[0])
 
+    def test_stock_per_branch_and_transfers(self):
+        p = self.stocked_product()  # 20 at Main, average cost 110
+        self.post('/admin/branches/new', {'code': 'BOLE', 'name': 'Bole shop', 'active': '1'}, once=False)
+        bole = self.one("SELECT id FROM branches WHERE code='BOLE'")['id']
+        bstock = lambda b: self.one('SELECT stock, avg_cost FROM product_stock WHERE product_id=? AND branch_id=?',
+                                    p['id'], b)
+        # Bole has none of it yet, so a sale there is refused and Main is untouched
+        self.post('/branch', {'branch': str(bole)}, once=False)
+        self.sell([(p['id'], 1)], tendered='150')
+        self.assertIsNone(self.one('SELECT * FROM sales'))
+        # send 5 from Main to Bole: Main 15 at once, Bole only when received
+        self.post('/branch', {'branch': '1'}, once=False)
+        r = self.post('/inventory/transfers/new', {'to_branch': str(bole), 'pid': [str(p['id'])], 'qty': ['5']},
+                      follow_redirects=True)
+        self.assertIn(b'In transit', r.data)
+        t = self.one('SELECT * FROM transfers')
+        self.assertEqual(t['ref_no'], 'MAIN-T-000001')
+        self.assertEqual(bstock(1)['stock'], 15)
+        self.assertIsNone(bstock(bole))
+        item = self.one('SELECT * FROM transfer_items')
+        self.assertAlmostEqual(item['unit_cost'], 11000)
+        self.post(f"/inventory/transfers/{t['id']}", {'receive': '1', f"r_{item['id']}": '5'}, once=False)
+        self.assertEqual(self.one('SELECT status FROM transfers')['status'], 'In transit')  # only Bole can receive
+        self.post('/branch', {'branch': str(bole)}, once=False)
+        self.post(f"/inventory/transfers/{t['id']}", {'receive': '1', f"r_{item['id']}": '4'}, once=False)
+        self.assertEqual(self.one('SELECT status FROM transfers')['status'], 'Received')
+        self.assertEqual(bstock(bole)['stock'], 4)  # one lost in transit
+        self.assertAlmostEqual(bstock(bole)['avg_cost'], 11000)  # same cost as at Main
+        self.assertEqual(self.stock(p['id'])['stock'], 19)  # business total
+        # a sale at Bole takes stock from Bole only, numbered with the branch code
+        self.sell([(p['id'], 2)], tendered='300')
+        s = self.one('SELECT * FROM sales ORDER BY id DESC')
+        self.assertEqual((s['branch_id'], s['receipt_no'][:7]), (bole, 'BOLE-S-'))
+        self.assertEqual((bstock(bole)['stock'], bstock(1)['stock']), (2, 15))
+        self.assertIn(b'BOLE-S-', self.c.get('/sales/').data)
+        self.assertNotIn(b'BOLE-S-', self.post('/branch', {'branch': '1', 'next': '/sales/'}, once=False,
+                                               follow_redirects=True).data)
+        # a transfer that never left can be cancelled by the sender: stock comes back
+        self.post('/inventory/transfers/new', {'to_branch': str(bole), 'pid': [str(p['id'])], 'qty': ['3']})
+        t2 = self.one('SELECT id FROM transfers ORDER BY id DESC')['id']
+        self.assertEqual(bstock(1)['stock'], 12)
+        self.post(f'/inventory/transfers/{t2}', {'cancel': '1', 'reason': 'Truck broke down'}, once=False)
+        self.assertEqual(bstock(1)['stock'], 15)
+        # cannot send more than the branch has
+        r = self.post('/inventory/transfers/new', {'to_branch': str(bole), 'pid': [str(p['id'])], 'qty': ['99']})
+        self.assertIn(b'Not enough stock', r.data)
+
+    def test_old_stock_moves_to_main_branch(self):
+        self.product(code='OLD', cost='10', opening='7')
+        con = core.connect(self.app.config['DATABASE'])
+        con.execute('DELETE FROM product_stock')  # as before version 2: stock only on products
+        con.close()
+        core.init_db(self.app.config['DATABASE'])
+        row = self.one("SELECT ps.stock FROM product_stock ps JOIN products p ON p.id=ps.product_id WHERE p.code='OLD'")
+        self.assertEqual(row['stock'], 7)
+
     def test_business_profile_and_logo(self):
         png = (b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00'
                b'\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00'

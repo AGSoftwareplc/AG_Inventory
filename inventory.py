@@ -1,7 +1,7 @@
 """Stock levels, adjustments, movement history and stocktaking."""
 from flask import Blueprint, flash, g, redirect, render_template, request, url_for
 
-from core import RuleError, date_range, fail, get_db, parse_qty, requires, today, tx
+from core import RuleError, branch_id, claim_once, date_range, fail, get_db, parse_qty, products_select, requires, today, tx
 import rules
 
 bp = Blueprint('inventory', __name__, url_prefix='/inventory')
@@ -13,7 +13,7 @@ def index():
     q = request.args.get('q', '').strip()
     cat = request.args.get('cat', '')
     low = request.args.get('low') == '1'
-    sql = ('SELECT p.*, c.name AS cat FROM products p LEFT JOIN categories c ON c.id=p.category_id '
+    sql = ('SELECT p.*, c.name AS cat FROM pv p LEFT JOIN categories c ON c.id=p.category_id '
            'WHERE p.active=1')
     args = []
     if q:
@@ -23,9 +23,9 @@ def index():
         sql += ' AND p.category_id=?'
         args.append(cat)
     if low:
-        sql += ' AND p.min_stock>0 AND p.stock<=p.min_stock'
+        sql += ' AND p.min_stock>0 AND p.in_branch AND p.stock<=p.min_stock'
     rows = get_db().execute(sql + ' ORDER BY p.name LIMIT 2000', args).fetchall()
-    value = get_db().execute('SELECT COALESCE(SUM(stock*avg_cost),0) FROM products WHERE active=1 '
+    value = get_db().execute('SELECT COALESCE(SUM(stock*avg_cost),0) FROM pv WHERE active=1 '
                              'AND stock>0').fetchone()[0]
     cats = get_db().execute('SELECT * FROM categories ORDER BY name').fetchall()
     return render_template('inventory/index.html', rows=rows, value=value, cats=cats, q=q, cat=cat,
@@ -47,11 +47,11 @@ def adjust():
             return redirect(url_for('inventory.adjust'))
         except (RuleError, ValueError, KeyError) as e:
             flash(str(e) if isinstance(e, RuleError) else 'Choose a product.', 'error')
-    products = db.execute('SELECT id, code, name, unit, stock FROM products WHERE active=1 '
+    products = db.execute('SELECT id, code, name, unit, stock FROM pv WHERE active=1 '
                           'ORDER BY name').fetchall()
     recent = db.execute("SELECT m.*, p.name, p.unit, u.username FROM stock_moves m JOIN products p "
                         "ON p.id=m.product_id LEFT JOIN users u ON u.id=m.user_id WHERE m.ref_type="
-                        "'adjustment' ORDER BY m.id DESC LIMIT 30").fetchall()
+                        "'adjustment' AND m.branch_id=? ORDER BY m.id DESC LIMIT 30", (branch_id(),)).fetchall()
     return render_template('inventory/adjust.html', products=products, recent=recent,
                            sel=request.args.get('pid', type=int), labels=rules.MOVE_LABELS)
 
@@ -63,8 +63,8 @@ def movements():
     mtype = request.args.get('type', '')
     pid = request.args.get('pid', type=int)
     sql = ('SELECT m.*, p.name, p.code, p.unit, u.username FROM stock_moves m JOIN products p '
-           'ON p.id=m.product_id LEFT JOIN users u ON u.id=m.user_id WHERE date(m.at) BETWEEN ? AND ?')
-    args = [start, end]
+           'ON p.id=m.product_id LEFT JOIN users u ON u.id=m.user_id WHERE m.branch_id=? AND date(m.at) BETWEEN ? AND ?')
+    args = [branch_id(), start, end]
     if mtype:
         sql += ' AND m.move_type=?'
         args.append(mtype)
@@ -91,7 +91,7 @@ def stocktakes():
             flash(str(e), 'error')
     rows = db.execute('SELECT s.*, u.username, (SELECT COUNT(*) FROM stocktake_items i WHERE '
                       'i.stocktake_id=s.id) AS n FROM stocktakes s LEFT JOIN users u ON u.id=s.user_id '
-                      'ORDER BY s.id DESC').fetchall()
+                      'WHERE s.branch_id=? ORDER BY s.id DESC', (branch_id(),)).fetchall()
     cats = db.execute('SELECT * FROM categories WHERE active=1 ORDER BY name').fetchall()
     return render_template('inventory/stocktakes.html', rows=rows, cats=cats)
 
@@ -120,6 +120,74 @@ def stocktake(st_id):
         except RuleError as e:
             flash(str(e), 'error')
     rows = db.execute('SELECT i.*, p.name, p.code, p.unit, p.stock, p.avg_cost FROM stocktake_items i '
-                      'JOIN products p ON p.id=i.product_id WHERE stocktake_id=? ORDER BY p.name',
-                      (st_id,)).fetchall()
+                      f"JOIN ({products_select(db, '?')}) p ON p.id=i.product_id WHERE stocktake_id=? ORDER BY p.name",
+                      (st['branch_id'], st_id)).fetchall()
     return render_template('inventory/stocktake.html', st=st, rows=rows)
+
+
+# ---------------------------------------------------------------- transfers between branches
+@bp.route('/transfers')
+@requires('adjust')
+def transfers():
+    rows = get_db().execute(
+        'SELECT t.*, f.name AS from_name, d.name AS to_name, u.username, '
+        '(SELECT COUNT(*) FROM transfer_items i WHERE i.transfer_id=t.id) AS n, '
+        '(SELECT COALESCE(SUM(i.qty*i.unit_cost),0) FROM transfer_items i WHERE i.transfer_id=t.id) AS value '
+        'FROM transfers t JOIN branches f ON f.id=t.from_branch JOIN branches d ON d.id=t.to_branch '
+        'LEFT JOIN users u ON u.id=t.user_id WHERE ? IN (t.from_branch, t.to_branch) ORDER BY t.id DESC LIMIT 500',
+        (branch_id(),)).fetchall()
+    return render_template('inventory/transfers.html', rows=rows)
+
+
+@bp.route('/transfers/new', methods=['GET', 'POST'])
+@requires('adjust')
+def transfer_new():
+    db = get_db()
+    if request.method == 'POST':
+        try:
+            lines = [(int(p), parse_qty(q)) for p, q in zip(request.form.getlist('pid'), request.form.getlist('qty'))
+                     if p]
+            with tx() as db:
+                claim_once(db)
+                tid = rules.send_transfer(db, request.form.get('to_branch', type=int), lines,
+                                          request.form.get('notes', '').strip(), g.user['id'], today())
+            flash('Transfer sent. The stock is now in transit until the other branch receives it.', 'ok')
+            return redirect(url_for('inventory.transfer', tid=tid))
+        except RuleError as e:
+            flash(str(e), 'error')
+    dests = db.execute('SELECT * FROM branches WHERE active=1 AND id<>? ORDER BY id', (branch_id(),)).fetchall()
+    products = db.execute('SELECT id, code, name, unit, stock FROM pv WHERE active=1 AND stock>0 '
+                          'ORDER BY name').fetchall()
+    return render_template('inventory/transfer_new.html', dests=dests, products=products)
+
+
+@bp.route('/transfers/<int:tid>', methods=['GET', 'POST'])
+@requires('adjust')
+def transfer(tid):
+    db = get_db()
+    t = db.execute('SELECT t.*, f.name AS from_name, d.name AS to_name, u.username, r.username AS receiver '
+                   'FROM transfers t JOIN branches f ON f.id=t.from_branch JOIN branches d ON d.id=t.to_branch '
+                   'LEFT JOIN users u ON u.id=t.user_id LEFT JOIN users r ON r.id=t.received_by WHERE t.id=?',
+                   (tid,)).fetchone()
+    if not t or branch_id() not in (t['from_branch'], t['to_branch']):
+        return fail('Transfer not found.', 'inventory.transfers')
+    if request.method == 'POST':
+        try:
+            with tx() as db:
+                if request.form.get('receive') and branch_id() == t['to_branch']:
+                    got = {int(k[2:]): parse_qty(v or '0', 'Received quantity', allow_zero=True)
+                           for k, v in request.form.items() if k.startswith('r_')}
+                    rules.receive_transfer(db, tid, got, g.user['id'])
+                    msg = 'Transfer received. The stock is now in this branch.'
+                elif request.form.get('cancel') and branch_id() == t['from_branch']:
+                    rules.cancel_transfer(db, tid, request.form.get('reason', ''), g.user['id'])
+                    msg = 'Transfer cancelled. The stock is back in this branch.'
+                else:
+                    raise RuleError('Switch to the right branch first.')
+            flash(msg, 'ok')
+            return redirect(url_for('inventory.transfer', tid=tid))
+        except RuleError as e:
+            flash(str(e), 'error')
+    items = db.execute('SELECT i.*, p.name, p.code, p.unit FROM transfer_items i JOIN products p '
+                       'ON p.id=i.product_id WHERE transfer_id=? ORDER BY i.id', (tid,)).fetchall()
+    return render_template('inventory/transfer.html', t=t, items=items)

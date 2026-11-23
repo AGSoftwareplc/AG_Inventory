@@ -1,7 +1,7 @@
 """Point of sale, sales history, receipts, customer payments, returns and cancellations."""
 from flask import Blueprint, flash, g, jsonify, redirect, render_template, request, url_for
 
-from core import (RuleError, can, claim_once, date_range, fail, get_db, parse_money, parse_qty,
+from core import (RuleError, branch_id, can, claim_once, date_range, fail, get_db, parse_money, parse_qty,
                   payment_methods, requires, rnd, today, tx)
 import rules
 
@@ -24,11 +24,11 @@ def api_products():
     if not q:
         return jsonify([])
     db = get_db()
-    rows = db.execute('SELECT id, code, barcode, name, unit, price, stock FROM products WHERE active=1 '
+    rows = db.execute('SELECT id, code, barcode, name, unit, price, stock FROM pv WHERE active=1 '
                       'AND (barcode=? OR code=?)', (q, q)).fetchall()
     exact = bool(rows)
     if not rows:
-        rows = db.execute('SELECT id, code, barcode, name, unit, price, stock FROM products WHERE '
+        rows = db.execute('SELECT id, code, barcode, name, unit, price, stock FROM pv WHERE '
                           'active=1 AND (name LIKE ? OR code LIKE ?) ORDER BY name LIMIT 15',
                           (f'%{q}%', f'{q}%')).fetchall()
     return jsonify({'exact': exact, 'items': [dict(r) for r in rows]})
@@ -96,8 +96,8 @@ def index():
     status = request.args.get('status', '')
     q = request.args.get('q', '').strip()
     sql = ('SELECT s.*, c.name AS customer, u.username FROM sales s LEFT JOIN customers c ON '
-           'c.id=s.customer_id LEFT JOIN users u ON u.id=s.user_id WHERE s.date BETWEEN ? AND ?')
-    args = [start, end]
+           'c.id=s.customer_id LEFT JOIN users u ON u.id=s.user_id WHERE s.branch_id=? AND s.date BETWEEN ? AND ?')
+    args = [branch_id(), start, end]
     if status == 'credit':
         sql += " AND s.status='Completed' AND s.total-s.refunded-s.paid>0"
     elif status:

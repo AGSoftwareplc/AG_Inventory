@@ -11,7 +11,7 @@
 <div class="card tablewrap" style="padding:0"><table>
 <tr><th>Code</th><th>Name</th><th>Category</th><th class="n">Stock</th><th class="n">Price</th>{% if can('reports') %}<th class="n">Avg cost</th>{% endif %}<th></th></tr>
 {% for p in rows %}
-<tr class="{{ 'low' if p.min_stock > 0 and p.stock <= p.min_stock }}">
+<tr class="{{ 'low' if p.min_stock > 0 and p.in_branch and p.stock <= p.min_stock }}">
   <td>{{ p.code }}</td>
   <td>{% if can('products') or can('inventory') %}<a href="{{ url_for('products.view', pid=p.id) }}">{{ p.name }}</a>{% else %}{{ p.name }}{% endif %}{% if not p.active %} <span class="badge">inactive</span>{% endif %}</td>
   <td>{{ p.cat or '' }}</td>

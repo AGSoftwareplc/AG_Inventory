@@ -97,7 +97,7 @@ def manual():
 
 
 def low_stock_count():
-    return get_db().execute('SELECT COUNT(*) FROM products WHERE active=1 AND stock<=min_stock '
+    return get_db().execute('SELECT COUNT(*) FROM pv WHERE active=1 AND in_branch AND stock<=min_stock '
                             'AND min_stock>0').fetchone()[0]
 
 

@@ -1,0 +1,27 @@
+{% extends 'base.html' %}{% block title %}Transfer {{ t.ref_no }}{% endblock %}
+{% block content %}
+<div class="head"><h1>Transfer {{ t.ref_no }}</h1><a class="btn light" href="{{ url_for('inventory.transfers') }}">Back to transfers</a></div>
+<div class="card grid">
+  <div><label>From</label>{{ t.from_name }}</div><div><label>To</label>{{ t.to_name }}</div>
+  <div><label>Status</label><span class="badge {{ 'ok' if t.status == 'Received' else 'err' if t.status == 'Cancelled' else 'warn' }}">{{ t.status }}</span></div>
+  <div><label>Sent</label>{{ t.date }} by {{ t.username }}</div>
+  {% if t.received_at %}<div><label>Received</label>{{ t.received_at }} by {{ t.receiver }}</div>{% endif %}
+  {% if t.notes %}<div class="wide"><label>Notes</label>{{ t.notes }}</div>{% endif %}
+  {% if t.cancel_reason %}<div class="wide"><label>Cancel reason</label>{{ t.cancel_reason }}</div>{% endif %}
+</div>
+{% set receiving = t.status == 'In transit' and g.branch and g.branch.id == t.to_branch %}
+<form method="post">{{ csrf() }}
+<div class="card tablewrap" style="padding:0"><table><tr><th>Product</th><th class="n">Sent</th><th class="n">Cost each</th><th class="n">Received</th>{% if t.status == 'Received' %}<th class="n">Lost in transit</th>{% endif %}</tr>
+{% for i in items %}<tr><td>{{ i.name }} ({{ i.code }})</td><td class="n">{{ i.qty|qty }} {{ i.unit }}</td><td class="n">{{ i.unit_cost|money }}</td>
+<td class="n">{% if receiving %}<input name="r_{{ i.id }}" value="{{ i.qty|qty }}" inputmode="decimal" style="width:100px;text-align:right">{% else %}{{ i.received_qty|qty }}{% endif %}</td>
+{% if t.status == 'Received' %}<td class="n">{% if i.qty - i.received_qty > 0.0005 %}<span class="badge err">{{ (i.qty - i.received_qty)|qty }}</span>{% else %}0{% endif %}</td>{% endif %}</tr>{% endfor %}
+</table></div>
+{% if receiving %}<div class="actions"><button name="receive" value="1">Receive into {{ t.to_name }}</button></div>
+<p class="muted">Count what arrived. If less arrived than was sent, enter what you got: the difference is recorded as lost in transit.</p>{% endif %}
+</form>
+{% if t.status == 'In transit' and g.branch and g.branch.id == t.from_branch %}
+<form method="post" class="card filters">{{ csrf() }}
+  <div class="grow"><label>Cancel this transfer (the stock comes back to {{ t.from_name }})</label><input name="reason" required placeholder="Reason"></div>
+  <div style="flex:0"><button name="cancel" value="1" class="light">Cancel transfer</button></div></form>
+{% elif t.status == 'In transit' and not receiving %}<p class="muted">Waiting for {{ t.to_name }} to receive it. Switch to that branch in the top bar to receive.</p>{% endif %}
+{% endblock %}

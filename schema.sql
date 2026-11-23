@@ -31,6 +31,36 @@ CREATE TABLE IF NOT EXISTS user_branches (   -- which branches a user may work i
   PRIMARY KEY (user_id, branch_id)
 );
 
+CREATE TABLE IF NOT EXISTS product_stock (   -- each branch's own stock and weighted average cost
+  product_id INTEGER NOT NULL REFERENCES products(id),
+  branch_id INTEGER NOT NULL REFERENCES branches(id),
+  stock REAL NOT NULL DEFAULT 0,
+  avg_cost REAL NOT NULL DEFAULT 0,
+  PRIMARY KEY (product_id, branch_id)
+);
+
+CREATE TABLE IF NOT EXISTS transfers (   -- stock sent from one branch to another
+  id INTEGER PRIMARY KEY,
+  ref_no TEXT NOT NULL UNIQUE,
+  from_branch INTEGER NOT NULL REFERENCES branches(id),
+  to_branch INTEGER NOT NULL REFERENCES branches(id),
+  status TEXT NOT NULL DEFAULT 'In transit',   -- In transit, Received, Cancelled
+  date TEXT NOT NULL,
+  notes TEXT NOT NULL DEFAULT '',
+  user_id INTEGER REFERENCES users(id),
+  received_by INTEGER REFERENCES users(id),
+  received_at TEXT,
+  cancel_reason TEXT
+);
+CREATE TABLE IF NOT EXISTS transfer_items (
+  id INTEGER PRIMARY KEY,
+  transfer_id INTEGER NOT NULL REFERENCES transfers(id),
+  product_id INTEGER NOT NULL REFERENCES products(id),
+  qty REAL NOT NULL,
+  unit_cost REAL NOT NULL,          -- average cost at the sending branch
+  received_qty REAL NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS role_permissions (
   role TEXT NOT NULL, perm TEXT NOT NULL, PRIMARY KEY (role, perm)
 );

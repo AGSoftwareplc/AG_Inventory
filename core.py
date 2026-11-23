@@ -24,7 +24,7 @@ PERMS = {
     'customers': 'Manage customers',
     'products': 'Manage products and categories',
     'inventory': 'View stock and movements',
-    'adjust': 'Adjust stock and run stocktakes',
+    'adjust': 'Adjust stock, run stocktakes and transfer stock between branches',
     'purchases': 'Create and manage purchases',
     'receive': 'Receive purchases and supplier returns',
     'suppliers': 'Manage suppliers',
@@ -76,7 +76,32 @@ def connect(path):
 def get_db():
     if 'db' not in g:
         g.db = connect(db_path())
+        add_branch_view(g.db)
     return g.db
+
+
+def products_select(con, branch_sql):
+    """SELECT list for products with stock and average cost of one branch (alias p, stock row s).
+
+    products.stock is the total of all branches; product_stock holds each branch's own stock and cost.
+    A branch that never had the product shows 0 stock and the product's last known cost."""
+    cols = [r['name'] for r in con.execute('PRAGMA main.table_info(products)') if r['name'] not in ('stock', 'avg_cost')]
+    return ('SELECT ' + ', '.join(f'p.{c}' for c in cols) + ', COALESCE(s.stock, 0) AS stock, '
+            'COALESCE(s.avg_cost, p.avg_cost) AS avg_cost, p.stock AS total_stock, s.product_id IS NOT NULL AS in_branch '
+            'FROM main.products p LEFT JOIN main.product_stock s ON s.product_id=p.id AND s.branch_id=' + branch_sql)
+
+
+def _current_branch():
+    try:
+        return branch_id()
+    except RuntimeError:  # outside a request
+        return 1
+
+
+def add_branch_view(con):
+    """pv = products as seen from the branch the user is working in (a view for this connection only)."""
+    con.create_function('cur_branch', 0, _current_branch)
+    con.execute('CREATE TEMP VIEW IF NOT EXISTS pv AS ' + products_select(con, 'cur_branch()'))
 
 
 def close_db(_exc=None):
@@ -116,6 +141,9 @@ def init_db(path, seed_starters=True):
                         [(n,) for n in EXPENSE_CATEGORIES])
     if not con.execute('SELECT 1 FROM branches LIMIT 1').fetchone():
         con.execute("INSERT INTO branches(id, code, name) VALUES (1, 'MAIN', 'Main branch')")
+    if not con.execute('SELECT 1 FROM product_stock LIMIT 1').fetchone():  # stock from before branches: Main
+        con.execute('INSERT INTO product_stock(product_id, branch_id, stock, avg_cost) '
+                    'SELECT id, 1, stock, avg_cost FROM products')
     if seed_starters:
         seed_users(con)
     # every user works in at least one branch (users from before branches existed: the Main branch)
@@ -314,12 +342,15 @@ def payment_methods():
 
 
 def audit(action, details='', db=None):
-    (db or get_db()).execute('INSERT INTO audit_log(user_id, action, details) VALUES (?,?,?)',
-                             (g.user['id'] if g.get('user') else None, action, details))
+    (db or get_db()).execute('INSERT INTO audit_log(user_id, action, details, branch_id) VALUES (?,?,?,?)',
+                             (g.user['id'] if g.get('user') else None, action, details,
+                              g.branch['id'] if g.get('branch') else None))
 
 
 def next_no(db, prefix, table, col):
-    """Next document number like S-000042. Call inside tx() so numbers never collide."""
+    """Next document number like MAIN-S-000042 (branch code first). Call inside tx() so numbers never collide."""
+    if g.get('branch'):
+        prefix = f"{g.branch['code']}-{prefix}"
     row = db.execute(f'SELECT MAX(id) AS m FROM {table}').fetchone()
     n = (row['m'] or 0) + 1
     while True:

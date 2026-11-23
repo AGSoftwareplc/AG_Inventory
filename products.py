@@ -3,7 +3,7 @@ import sqlite3
 
 from flask import Blueprint, flash, g, redirect, render_template, request, url_for
 
-from core import RuleError, audit, claim_once, fail, get_db, parse_money, parse_qty, requires, tx
+from core import RuleError, audit, branch_id, claim_once, fail, get_db, parse_money, parse_qty, requires, tx
 from rules import move_stock
 
 bp = Blueprint('products', __name__, url_prefix='/products')
@@ -22,7 +22,7 @@ def index():
     q = request.args.get('q', '').strip()
     cat = request.args.get('cat', '')
     status = request.args.get('status', 'active')
-    sql = ('SELECT p.*, c.name AS cat FROM products p LEFT JOIN categories c ON c.id=p.category_id '
+    sql = ('SELECT p.*, c.name AS cat FROM pv p LEFT JOIN categories c ON c.id=p.category_id '
            'WHERE 1=1')
     args = []
     if q:
@@ -36,7 +36,7 @@ def index():
     elif status == 'inactive':
         sql += ' AND p.active=0'
     elif status == 'low':
-        sql += ' AND p.active=1 AND p.min_stock>0 AND p.stock<=p.min_stock'
+        sql += ' AND p.active=1 AND p.min_stock>0 AND p.in_branch AND p.stock<=p.min_stock'
     rows = get_db().execute(sql + ' ORDER BY p.name LIMIT 1000', args).fetchall()
     return render_template('products/index.html', rows=rows, cats=categories(), q=q, cat=cat,
                            status=status)
@@ -65,6 +65,9 @@ def _create(db, v):
                      'price, avg_cost, min_stock) VALUES (?,?,?,?,?,?,?,?,?)',
                      (v['code'], v['name'], v['category_id'], v['description'], v['unit'],
                       v['barcode'], v['price'], v['cost'], v['min_stock'])).lastrowid
+    # the branch that registers a product carries it (other branches start carrying it when stock arrives)
+    db.execute('INSERT INTO product_stock(product_id, branch_id, stock, avg_cost) VALUES (?,?,0,?)',
+               (pid, branch_id(), v['cost']))
     if v['opening'] > 0:
         move_stock(db, pid, v['opening'], 'opening', g.user['id'], 'opening',
                    reason='Opening stock', in_cost=v['cost'])
@@ -165,12 +168,13 @@ def edit(pid=None):
 @requires('products', 'inventory')
 def view(pid):
     db = get_db()
-    p = db.execute('SELECT p.*, c.name AS cat FROM products p LEFT JOIN categories c '
+    p = db.execute('SELECT p.*, c.name AS cat FROM pv p LEFT JOIN categories c '
                    'ON c.id=p.category_id WHERE p.id=?', (pid,)).fetchone()
     if not p:
         return fail('Product not found.', 'products.index')
     moves = db.execute('SELECT m.*, u.username FROM stock_moves m LEFT JOIN users u ON u.id=m.user_id '
-                       'WHERE product_id=? ORDER BY m.id DESC LIMIT 50', (pid,)).fetchall()
+                       'WHERE product_id=? AND m.branch_id=? ORDER BY m.id DESC LIMIT 50',
+                       (pid, branch_id())).fetchall()
     prices = db.execute('SELECT pc.*, u.username FROM price_changes pc LEFT JOIN users u '
                         'ON u.id=pc.user_id WHERE product_id=? ORDER BY pc.id DESC LIMIT 20',
                         (pid,)).fetchall()
@@ -189,6 +193,7 @@ def delete(pid):
                     'Deactivate it instead.', 'products.edit', pid=pid)
     with tx() as db:
         db.execute('DELETE FROM price_changes WHERE product_id=?', (pid,))
+        db.execute('DELETE FROM product_stock WHERE product_id=?', (pid,))
         db.execute('DELETE FROM products WHERE id=?', (pid,))
         audit('product_delete', str(pid), db)
     flash('Product deleted.', 'ok')

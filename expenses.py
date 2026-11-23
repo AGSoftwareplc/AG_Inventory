@@ -3,7 +3,7 @@ import sqlite3
 
 from flask import Blueprint, flash, g, redirect, render_template, request, url_for
 
-from core import (RuleError, audit, claim_once, date_range, get_db, next_no, parse_money,
+from core import (RuleError, audit, branch_id, claim_once, date_range, get_db, next_no, parse_money,
                   payment_methods, requires, today, tx)
 
 bp = Blueprint('expenses', __name__, url_prefix='/expenses')
@@ -23,10 +23,10 @@ def index():
                 claim_once(db)
                 ref = next_no(db, 'E', 'expenses', 'ref_no')
                 db.execute('INSERT INTO expenses(ref_no, category_id, description, amount, date, method, '
-                           'user_id) VALUES (?,?,?,?,?,?,?)',
+                           'user_id, branch_id) VALUES (?,?,?,?,?,?,?,?)',
                            (ref, cat, request.form.get('description', '').strip(), amount,
                             request.form.get('date') or today(), request.form.get('method', 'Cash'),
-                            g.user['id']))
+                            g.user['id'], branch_id()))
             flash(f'Expense {ref} recorded.', 'ok')
         except RuleError as e:
             flash(str(e), 'error')
@@ -35,8 +35,8 @@ def index():
     cat = request.args.get('cat', type=int)
     sql = ('SELECT e.*, c.name AS cat, u.username, (SELECT r.ref_no FROM expenses r WHERE r.reversal_of=e.id) '
            'AS reversed_by FROM expenses e JOIN expense_categories c ON '
-           'c.id=e.category_id LEFT JOIN users u ON u.id=e.user_id WHERE e.date BETWEEN ? AND ?')
-    args = [start, end]
+           'c.id=e.category_id LEFT JOIN users u ON u.id=e.user_id WHERE e.branch_id=? AND e.date BETWEEN ? AND ?')
+    args = [branch_id(), start, end]
     if cat:
         sql += ' AND e.category_id=?'
         args.append(cat)
@@ -65,9 +65,9 @@ def reverse(eid):
                 raise RuleError('This expense is already reversed.')
             ref = next_no(db, 'E', 'expenses', 'ref_no')
             db.execute('INSERT INTO expenses(ref_no, category_id, description, amount, date, method, user_id, '
-                       'reversal_of) VALUES (?,?,?,?,?,?,?,?)',
+                       'reversal_of, branch_id) VALUES (?,?,?,?,?,?,?,?,?)',
                        (ref, e['category_id'], f"Reversal of {e['ref_no']}: {reason}", -e['amount'], today(),
-                        e['method'], g.user['id'], eid))
+                        e['method'], g.user['id'], eid, e['branch_id']))
             audit('expense_reverse', f"{e['ref_no']}: {reason}", db)
         flash(f"Expense {e['ref_no']} reversed by {ref}.", 'ok')
     except RuleError as err:
