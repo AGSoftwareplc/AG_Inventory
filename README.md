@@ -6,7 +6,7 @@ A simple web app for small and medium shops. It covers the whole flow from purch
 - **Works offline:** it runs on the shop network without internet access.
 - **Several devices:** one PC runs the app, and other PCs, tablets and phones on the shop Wi-Fi use it in a browser.
 
-The requirements are in *Shop Inventory Management SRS v1.1*. [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) shows how each acceptance criterion is checked.
+The requirements are in *Shop Inventory Management SRS v1.1*. [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) shows how each acceptance criterion is checked. [docs/TECH_STACK.md](docs/TECH_STACK.md) describes the technology used and how the code is organised.
 
 ## Install (one time)
 
