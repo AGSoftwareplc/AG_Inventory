@@ -328,10 +328,30 @@ class ShopTest(unittest.TestCase):
 
     # ---------------------------------------------------------------- security
     def test_default_password_warning(self):
-        self.assertIn(b'default password', self.c.get('/').data)
+        self.assertIn(b'starter password', self.c.get('/').data)
         self.post('/password', {'current': 'admin123', 'new': 'n3w-pass', 'confirm': 'n3w-pass'}, once=False)
-        self.assertNotIn(b'default password', self.c.get('/').data)
+        self.assertNotIn(b'starter password', self.c.get('/').data)
         self.login('admin', 'n3w-pass')
+
+    def test_starter_user_per_role(self):
+        con = self.db()
+        users = {r['username']: r['role'] for r in con.execute('SELECT username, role FROM users')}
+        con.close()
+        self.assertEqual(users, {'admin': 'Administrator', 'cashier': 'Sales Attendant',
+                                 'storekeeper': 'Inventory Manager'})
+        self.login('cashier', 'cashier123')
+        self.assertIn(b'starter password for "cashier"', self.c.get('/').data)
+        self.assertEqual(self.c.get('/sales/pos').status_code, 200)
+        self.assertEqual(self.c.get('/purchases/').status_code, 403)
+        self.login('storekeeper', 'store123')
+        self.assertEqual(self.c.get('/purchases/').status_code, 200)
+        self.assertEqual(self.c.get('/sales/pos').status_code, 403)
+        # seeded only once: a deactivated or renamed starter user is not re-created on restart
+        con = self.db()
+        con.execute("UPDATE users SET username='kasa' WHERE username='cashier'")
+        con.close()
+        create_app(self.dbfile, testing=True)
+        self.assertIsNone(self.one("SELECT 1 FROM users WHERE username='cashier'"))
 
     def test_upgrade_old_database(self):
         """A database from version 1.0 (no expenses.reversal_of) is upgraded on start."""

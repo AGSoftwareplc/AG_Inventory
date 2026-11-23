@@ -109,11 +109,37 @@ def init_db(path):
     if not con.execute('SELECT 1 FROM expense_categories LIMIT 1').fetchone():
         con.executemany('INSERT INTO expense_categories(name) VALUES (?)',
                         [(n,) for n in EXPENSE_CATEGORIES])
-    if not con.execute('SELECT 1 FROM users LIMIT 1').fetchone():
-        from werkzeug.security import generate_password_hash
-        con.execute('INSERT INTO users(username, full_name, password_hash, role) VALUES (?,?,?,?)',
-                    ('admin', 'Administrator', generate_password_hash('admin123'), ADMIN))
+    seed_users(con)
     con.close()
+
+
+# One starter login per role: (username, full name, role, starter password).
+# Created once per database; afterwards the administrator manages them in Users.
+STARTER_USERS = [
+    ('admin', 'Administrator', ADMIN, 'admin123'),
+    ('cashier', 'Cashier', 'Sales Attendant', 'cashier123'),
+    ('storekeeper', 'Store keeper', 'Inventory Manager', 'store123'),
+]
+
+
+def seed_users(con):
+    from werkzeug.security import generate_password_hash
+    done = con.execute("SELECT 1 FROM settings WHERE key='seeded_role_users'").fetchone()
+    if done:
+        return
+    for username, name, role, pw in STARTER_USERS:
+        con.execute('INSERT OR IGNORE INTO users(username, full_name, password_hash, role) VALUES (?,?,?,?)',
+                    (username, name, generate_password_hash(pw), role))
+    con.execute("INSERT INTO settings(key, value) VALUES ('seeded_role_users', '1')")
+
+
+def uses_starter_password(user):
+    """True while a starter login still has its starter password."""
+    from werkzeug.security import check_password_hash
+    for username, _n, _r, pw in STARTER_USERS:
+        if user['username'].lower() == username:
+            return check_password_hash(user['password_hash'], pw)
+    return False
 
 
 # Columns added after version 1.0: (table, column, definition). Applied once to older databases.
