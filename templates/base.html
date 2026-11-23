@@ -25,27 +25,24 @@
   ]),
   ('Stock', [
     ('inventory.index', 'Stock levels', can('inventory'), ep == 'inventory.index', ''),
-    ('products.index', 'Products', can('products') or can('inventory'), ep.startswith('products.') and ep != 'products.cats', ''),
+    ('products.index', 'Products', can('products') or can('inventory'), ep.startswith('products.'), ''),
     ('inventory.adjust', 'Adjust stock', can('adjust'), ep == 'inventory.adjust', ''),
     ('inventory.stocktakes', 'Stocktake', can('adjust'), ep.startswith('inventory.stocktake'), ''),
     ('inventory.movements', 'Stock movements', can('inventory'), ep == 'inventory.movements', ''),
-    ('products.cats', 'Categories', can('products'), ep == 'products.cats', ''),
   ]),
   ('Money & reports', [
     ('expenses.index', 'Expenses', can('expenses'), ep.startswith('expenses.'), ''),
     ('reports.index', 'Reports', can('reports'), ep.startswith('reports.'), ''),
   ]),
   ('Administration', [
-    ('admin.users', 'Users', g.user.role == 'Administrator', ep.startswith('admin.user'), ''),
-    ('admin.roles', 'Role permissions', g.user.role == 'Administrator', ep == 'admin.roles', ''),
-    ('admin.settings', 'Settings & backup', g.user.role == 'Administrator', ep == 'admin.settings', ''),
-    ('admin.audit_log', 'Audit log', g.user.role == 'Administrator', ep == 'admin.audit_log', ''),
+    ('admin.users', 'Users, settings & backup', g.user.role == 'Administrator', ep.startswith('admin.'), ''),
   ]),
 ] %}
 <header class="top">
   <label for="navtoggle" class="burger" aria-label="Menu">☰</label>
   <a class="shop" href="{{ url_for('dash.index') }}">{{ setting('shop_name') }}</a>
   <div class="spacer"></div>
+  {% if g.user.role == 'Administrator' %}<a class="adminlink {{ 'on' if ep.startswith('admin.') }}" href="{{ url_for('admin.users') }}" title="Users, permissions, settings, backup">⚙ Admin</a>{% endif %}
   <button type="button" class="helpbtn" onclick="openHelp()" title="Help (F1)">? Help</button>
   <div class="user">{{ g.user.full_name }} <a href="{{ url_for('auth.password') }}">Password</a> <a href="{{ url_for('auth.logout') }}">Log out</a></div>
 </header>

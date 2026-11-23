@@ -348,10 +348,11 @@ class ShopTest(unittest.TestCase):
     def test_side_menu_order_and_help(self):
         html = self.c.get('/').data.decode()
         order = ['Sell (POS)', 'Dashboard', 'Sales history', 'Purchases &amp; receiving', 'Stock levels',
-                 'Expenses', 'Reports', 'Users']
+                 'Expenses', 'Reports', 'Users, settings &amp; backup']
         side = html[html.index('<aside'):html.index('</aside>')]
         pos = [side.index(label) for label in order]
         self.assertEqual(pos, sorted(pos))
+        self.assertIn('>⚙ Admin</a>', html)  # admin pages always reachable from the top bar
         self.assertIn('id="help-dashboard"', html)  # help pop-up with the manual
         self.assertIn("'help-' + (topic || 'dashboard')", html)  # opens at this page's topic
         self.assertIn("|| 'pos')", self.c.get('/sales/pos').data.decode())
@@ -362,7 +363,8 @@ class ShopTest(unittest.TestCase):
         html = self.c.get('/').data.decode()
         side = html[html.index('<aside'):html.index('</aside>')]
         self.assertIn('Sell (POS)', side)
-        self.assertNotIn('Role permissions', side)
+        self.assertNotIn('Users, settings', side)
+        self.assertNotIn('>⚙ Admin</a>', html)
         self.assertNotIn('Adjust stock', side)
 
     @staticmethod
