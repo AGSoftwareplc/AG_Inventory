@@ -18,16 +18,64 @@
   <div class="tile"><div class="k">Active products</div><div class="v">{{ d.products }}</div></div>
   <div class="tile {{ 'bad' if low }}"><div class="k">Low-stock products</div><div class="v">{{ low|length }}{{ '+' if low|length == 15 }}</div></div>
 </div>
+{% macro ring(c, title, empty) %}
+<div class="card chart"><h2>{{ title }}</h2>
+  {% if c.parts %}<div class="ring">
+    <svg viewBox="0 0 42 42" role="img" aria-label="{{ title }}">
+      <circle cx="21" cy="21" r="15.9155" fill="none" stroke="#eef1f4" stroke-width="7"/>
+      {% for it in c.parts %}<circle class="{{ it.css }}" cx="21" cy="21" r="15.9155" fill="none" stroke-width="7"
+        stroke-dasharray="{{ '%.2f'|format(it.dash) }} {{ '%.2f'|format(100 - it.dash) }}" stroke-dashoffset="{{ '%.2f'|format(it.off) }}">
+        <title>{{ it.k }}: {{ it.v|money }} ({{ '%.0f'|format(it.pct) }}%)</title></circle>{% endfor %}
+      <text x="21" y="20" text-anchor="middle" class="rt">{{ short(c.total) }}</text>
+      <text x="21" y="25.5" text-anchor="middle" class="rs">{{ currency }} total</text>
+    </svg>
+    <ul class="legend">{% for it in c.parts %}<li><i class="{{ it.css }}"></i><span>{{ it.k }}</span>
+      <b>{{ '%.0f'|format(it.pct) }}%</b><small class="muted">{{ it.v|money }}</small></li>{% endfor %}</ul>
+  </div>{% else %}<p class="muted">{{ empty }}</p>{% endif %}
+</div>
+{% endmacro %}
+
+{% set t = charts.trend %}
+<div class="card chart"><h2>{{ 'Net sales' if show_money else 'Number of sales' }} {{ 'per month' if t.monthly else 'per day' }}
+  <small class="muted">· total {{ t.total|money if show_money else t.total }}</small></h2>
+  <div class="trendwrap"><svg class="trend" viewBox="0 0 {{ t.W }} {{ t.H }}" role="img" aria-label="Sales per {{ 'month' if t.monthly else 'day' }}">
+    {% for gl in t.grid %}<line x1="{{ t.L }}" x2="{{ t.W }}" y1="{{ gl.y }}" y2="{{ gl.y }}" class="{{ 'base' if loop.first else 'grid' }}"/>
+    <text x="{{ t.L - 6 }}" y="{{ gl.y + 4 }}" text-anchor="end" class="ax">{{ gl.label }}</text>{% endfor %}
+    {% for b in t.bars %}<g class="bar"><rect class="hit" x="{{ b.cx - 15 }}" y="0" width="30" height="{{ t.B }}"/>
+      {% if b.h > 0 %}<path class="s1" d="M{{ '%.1f'|format(b.x) }} {{ t.B }}V{{ '%.1f'|format(b.y + [3, b.h]|min) }}q0 -{{ [3, b.h]|min }} {{ [3, b.h]|min }} -{{ [3, b.h]|min }}H{{ '%.1f'|format(b.x + b.w - [3, b.h]|min) }}q{{ [3, b.h]|min }} 0 {{ [3, b.h]|min }} {{ [3, b.h]|min }}V{{ t.B }}Z"/>{% endif %}
+      <title>{{ b.label }}: {{ b.v|money if show_money else b.v ~ ' sales' }}</title>
+      {% if b.tick %}<text x="{{ '%.1f'|format(b.cx) }}" y="{{ t.B + 18 }}" text-anchor="middle" class="ax">{{ b.tick }}</text>{% endif %}</g>{% endfor %}
+  </svg></div>
+  {% if t.empty %}<p class="muted" style="margin:0">No sales in this period yet.</p>{% else %}<p class="muted hint">Point at a bar to see the amount.</p>{% endif %}
+</div>
+
 <div class="row">
-  <div class="card"><h2 style="margin-top:0">Low stock</h2>
-    {% if low %}<div class="tablewrap"><table><tr><th>Product</th><th class="n">Stock</th><th class="n">Min</th></tr>
-    {% for r in low %}<tr class="low"><td>{% if can('products') or can('inventory') %}<a href="{{ url_for('products.view', pid=r.id) }}">{{ r.name }}</a>{% else %}{{ r.name }}{% endif %}</td><td class="n">{{ r.stock|qty }} {{ r.unit }}</td><td class="n">{{ r.min_stock|qty }}</td></tr>{% endfor %}
-    </table></div>{% else %}<p class="muted">All products are above their minimum level.</p>{% endif %}
+  {% if show_money %}
+  <div class="card chart"><h2>Where the money went</h2>
+    <div class="hbars">{% for label, v, w, css in charts.flow %}
+      <div class="hb"><span>{{ label }}</span><div class="track"><div class="fill {{ css }}" style="width:{{ '%.1f'|format(w) }}%"></div></div><b>{{ v|money }}</b></div>{% endfor %}
+    </div>
+    <p class="muted hint">Net profit = net sales − cost of goods sold − expenses.</p>
   </div>
-  <div class="card"><h2 style="margin-top:0">Best-selling products</h2>
-    {% if best %}<div class="tablewrap"><table><tr><th>Product</th><th class="n">Qty</th>{% if show_money %}<th class="n">Value</th>{% endif %}</tr>
-    {% for r in best %}<tr><td>{{ r.name }}</td><td class="n">{{ r.q|qty }} {{ r.unit }}</td>{% if show_money %}<td class="n">{{ r.v|money }}</td>{% endif %}</tr>{% endfor %}
-    </table></div>{% else %}<p class="muted">No sales in this period.</p>{% endif %}
+  {% endif %}
+  <div class="card chart"><h2>Best-selling products {{ '(by value)' if show_money else '(by quantity)' }}</h2>
+    {% if best %}<div class="hbars">{% for r, w in charts.best %}
+      <div class="hb"><span title="{{ r.name }}">{{ r.name }}</span><div class="track"><div class="fill s1" style="width:{{ '%.1f'|format(w) }}%"></div></div>
+        <b>{{ r.v|money if show_money else r.q|qty ~ ' ' ~ r.unit }}</b></div>{% endfor %}
+    </div>{% else %}<p class="muted">No sales in this period.</p>{% endif %}
   </div>
+</div>
+
+{% if show_money %}<div class="row">
+  {{ ring(charts.pay, 'How customers paid', 'No payments in this period.') }}
+  {{ ring(charts.cats, 'Stock value by category', 'No stock on hand.') }}
+</div>{% endif %}
+
+<div class="card chart"><h2>Low stock <small class="muted">· stock compared with its minimum level</small></h2>
+  {% if low %}<div class="hbars">{% for r in low %}
+    <div class="hb"><span>{% if can('products') or can('inventory') %}<a href="{{ url_for('products.view', pid=r.id) }}">{{ r.name }}</a>{% else %}{{ r.name }}{% endif %}</span>
+      <div class="track"><div class="fill {{ 'bad' if r.stock <= 0 else 'warn' }}" style="width:{{ '%.1f'|format([100 * r.stock / r.min_stock, 0]|max) }}%"></div></div>
+      <b>{{ r.stock|qty }} / {{ r.min_stock|qty }} {{ r.unit }}</b></div>{% endfor %}
+  </div>{% else %}<p class="muted">All products are above their minimum level.</p>{% endif %}
 </div>
 {% endblock %}

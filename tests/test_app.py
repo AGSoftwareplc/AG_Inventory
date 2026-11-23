@@ -326,6 +326,17 @@ class ShopTest(unittest.TestCase):
         self.assertEqual(rules.profit(con, '2000-01-01', '2100-01-01')['expenses'], 0)
         con.close()
 
+    def test_dashboard_graphs(self):
+        html = self.c.get('/').data
+        for title in (b'Net sales per day', b'Where the money went', b'How customers paid',
+                      b'Stock value by category', b'Low stock'):
+            self.assertIn(title, html)
+        self.assertIn(b'per month', self.c.get('/?start=2026-01-01&end=2026-12-31').data)
+        self.login('cashier', 'cashier123')  # no report rights: counts only, no money graphs
+        html = self.c.get('/').data
+        self.assertIn(b'Number of sales per day', html)
+        self.assertNotIn(b'How customers paid', html)
+
     # ---------------------------------------------------------------- security
     def test_default_password_warning(self):
         self.assertIn(b'starter password', self.c.get('/').data)
