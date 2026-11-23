@@ -90,7 +90,10 @@ def view(pur_id):
     rets = db.execute("SELECT r.*, p.name, u.username FROM returns r JOIN products p ON p.id=r.product_id "
                       "LEFT JOIN users u ON u.id=r.user_id WHERE kind='purchase' AND doc_id=? ORDER BY r.id",
                       (pur_id,)).fetchall()
-    return render_template('purchases/view.html', pur=pur, items=items, pays=pays, rets=rets,
+    batches = db.execute('SELECT b.*, p.name, p.unit FROM stock_batches b JOIN products p ON p.id=b.product_id '
+                         'JOIN purchase_items i ON i.id=b.purchase_item_id WHERE i.purchase_id=? ORDER BY b.id',
+                         (pur_id,)).fetchall()
+    return render_template('purchases/view.html', pur=pur, items=items, pays=pays, rets=rets, batches=batches,
                            gross=gross, balance=rules.purchase_balance(pur), methods=payment_methods(),
                            pay_status=rules.payment_status(pur['total'] - pur['returned_value'], pur['paid']),
                            today=today())
@@ -126,10 +129,11 @@ def receive(pur_id):
     try:
         got = {int(k[2:]): parse_qty(v, allow_zero=True)
                for k, v in request.form.items() if k.startswith('r_') and v.strip()}
+        exp = {int(k[2:]): v.strip() for k, v in request.form.items() if k.startswith('x_') and v.strip()}
     except RuleError as e:
         return fail(e, 'purchases.view', pur_id=pur_id)
-    return _act(pur_id, lambda db: rules.receive_purchase(db, pur_id, got, g.user['id']),
-                'Received into stock.')
+    return _act(pur_id, lambda db: rules.receive_purchase(db, pur_id, got, g.user['id'], exp),
+                'Received into stock. Each line is now a stock batch (FIFO).')
 
 
 @bp.route('/<int:pur_id>/return', methods=['POST'])
@@ -153,5 +157,6 @@ def pay(pur_id):
     except RuleError as e:
         return fail(e, 'purchases.view', pur_id=pur_id)
     return _act(pur_id, lambda db: rules.pay_purchase(db, pur_id, amount, request.form.get('method', 'Cash'),
-                                                       request.form.get('date') or today(), g.user['id']),
+                                                       request.form.get('date') or today(), g.user['id'],
+                                                       request.form.get('reference', '')),
                 'Payment recorded.')

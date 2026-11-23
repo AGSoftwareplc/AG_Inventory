@@ -73,7 +73,7 @@ To move the system to another PC, copy the whole folder, including `data/`, and 
 ## How the money and stock rules work
 
 - **Stock** changes only on purchase receiving, sales, returns, cancellations, adjustments and stocktakes. Each change is recorded in *Inventory → Movements* with the user and a reference.
-- **Product cost** uses the weighted average cost. A purchase discount is spread over the purchase lines.
+- **Product cost** uses FIFO stock batches: each delivery is a batch with its own cost, sales take from the batch that expires first, then the oldest, and the cost of goods sold is the cost of the batches used. A purchase discount is spread over the purchase lines.
 - **Each sale line** stores its selling price and cost, so later price changes don't alter history.
 - **Gross profit** = net sales (after discounts and returns) − cost of goods sold.
 - **Net operating profit** = gross profit − expenses.

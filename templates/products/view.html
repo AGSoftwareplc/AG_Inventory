@@ -6,10 +6,16 @@
 <div class="tiles">
   <div class="tile {{ 'bad' if p.min_stock > 0 and p.stock <= p.min_stock }}"><div class="k">In stock</div><div class="v">{{ p.stock|qty }} {{ p.unit }}</div><div class="muted">minimum {{ p.min_stock|qty }}</div></div>
   <div class="tile"><div class="k">Selling price</div><div class="v">{{ p.price|money }}</div></div>
-  {% if can('reports') %}<div class="tile"><div class="k">Average cost</div><div class="v">{{ p.avg_cost|money }}</div></div>
+  {% if can('reports') %}<div class="tile"><div class="k">Average cost (FIFO batches)</div><div class="v">{{ p.avg_cost|money }}</div></div>
   <div class="tile"><div class="k">Stock value</div><div class="v">{{ (p.stock * p.avg_cost)|money }}</div></div>{% endif %}
 </div>
 <div class="card"><p><b>Category:</b> {{ p.cat or '-' }} · <b>Barcode:</b> {{ p.barcode or '-' }} · <b>Status:</b> {{ 'Active' if p.active else 'Inactive' }}</p>{% if p.description %}<p>{{ p.description }}</p>{% endif %}</div>
+<h2>Batches in stock (FIFO order: sold first at the top)</h2>
+<div class="card tablewrap" style="padding:0"><table>
+<tr><th>Batch</th><th>From</th><th>Received</th><th>Expiry</th><th class="n">In stock</th>{% if can('reports') %}<th class="n">Unit cost</th>{% endif %}</tr>
+{% for b in batches %}<tr><td><a href="{{ url_for('inventory.batch', bid=b.id) }}">#{{ b.id }}</a></td><td>{{ b.ref_no }}</td><td>{{ b.received }}</td><td>{{ b.expiry or '' }}</td><td class="n">{{ b.remaining|qty }} {{ p.unit }}</td>{% if can('reports') %}<td class="n">{{ b.unit_cost|money }}</td>{% endif %}</tr>
+{% else %}<tr><td colspan="6" class="muted">No stock in this branch.</td></tr>{% endfor %}
+</table></div>
 <h2>Recent stock movements</h2>
 <div class="card tablewrap" style="padding:0"><table>
 <tr><th>Date</th><th>Type</th><th class="n">Qty</th><th class="n">Balance</th><th>Reference</th><th>Reason</th><th>User</th></tr>

@@ -1,0 +1,21 @@
+{% extends 'base.html' %}{% block title %}Batch #{{ b.id }}{% endblock %}
+{% block content %}
+<div class="head"><h1>Batch #{{ b.id }}: {{ b.name }} <span class="muted">({{ b.code }})</span></h1><a class="btn light" href="{{ url_for('inventory.batches', q=b.code) }}">All batches of this product</a></div>
+<div class="card grid">
+  <div><label>From</label>{{ labels.get(b.source, b.source) }} {{ b.ref_no }}</div>
+  <div><label>Received</label>{{ b.received }}</div>
+  <div><label>Quantity in</label>{{ b.qty|qty }} {{ b.unit }}</div>
+  <div><label>Still in stock</label><b>{{ b.remaining|qty }} {{ b.unit }}</b></div>
+  {% if can('reports') %}<div><label>Unit cost</label>{{ b.unit_cost|money }}</div><div><label>Value in stock</label>{{ (b.remaining*b.unit_cost)|money }}</div>{% endif %}
+  <div><label>Expiry date</label>{{ b.expiry or 'not set' }}</div>
+</div>
+{% if can('adjust') %}<form method="post" class="card">{{ csrf() }}<h2 style="margin-top:0">Expiry date</h2>
+<div class="grid"><div><label>Expiry date (leave empty for none)</label><input type="date" name="expiry" value="{{ b.expiry or '' }}"></div></div>
+<div class="actions"><button class="light">Save expiry date</button> {% if b.remaining > 0.0005 %}<a class="btn light" href="{{ url_for('inventory.adjust', pid=b.product_id, batch=b.id) }}">Write off from this batch</a>{% endif %}</div></form>{% endif %}
+<h2>Batch history</h2>
+<div class="card tablewrap" style="padding:0"><table><tr><th>Date</th><th>Type</th><th>Reference</th><th class="n">Qty</th>{% if can('reports') %}<th class="n">Unit cost</th>{% endif %}<th>Reason</th><th>User</th></tr>
+{% for m in moves %}<tr><td>{{ m.at }}</td><td>{{ labels.get(m.move_type, m.move_type) }}</td>
+<td>{% if m.ref_type == 'sale' and can('sales_view') %}<a href="{{ url_for('sales.view', sid=m.ref_id) }}">{{ m.ref_no }}</a>{% elif m.ref_type == 'purchase' and (can('purchases') or can('receive')) %}<a href="{{ url_for('purchases.view', pur_id=m.ref_id) }}">{{ m.ref_no }}</a>{% else %}{{ m.ref_no }}{% endif %}</td>
+<td class="n">{{ '+' if m.qty > 0 }}{{ m.qty|qty }}</td>{% if can('reports') %}<td class="n">{{ m.unit_cost|money }}</td>{% endif %}<td>{{ m.reason }}</td><td>{{ m.username }}</td></tr>
+{% endfor %}</table></div>
+{% endblock %}

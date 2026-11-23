@@ -127,7 +127,7 @@ def create_app(database=None, testing=False):
     # one small platform file lists the businesses; each business has its own database file
     app.config['PLATFORM_DB'] = os.path.join(os.path.dirname(os.path.abspath(app.config['DATABASE'])),
                                              'platform.db')
-    core.init_platform(app.config['PLATFORM_DB'], app.config['DATABASE'])
+    core.init_platform(app.config['PLATFORM_DB'], app.config['DATABASE'], app.config['BACKUP_DIR'])
 
     import admin, contacts, expenses, inventory, products, purchases, reports, sales
     for bp in (auth, reports.dash, admin.bp, contacts.bp, expenses.bp, inventory.bp, products.bp,

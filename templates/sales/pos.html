@@ -23,12 +23,14 @@
     <div class="line grand"><span>Total</span><span id="grand">0.00</span></div>
     <p><label>Payment method</label><select name="method">{% for m in methods %}<option>{{ m }}</option>{% endfor %}</select></p>
     <p><label>Amount paid ({{ currency }})</label><input name="tendered" id="tendered" inputmode="decimal" style="font-size:1.3rem"></p>
+    <p><label>TT No. / payment reference <span class="muted">(Telebirr, bank transfer…)</span></label><input name="reference" maxlength="60" autocomplete="off"></p>
     <div class="line"><span>Change</span><span class="chg" id="change">0.00</span></div>
     <div class="line muted" id="duebox" hidden><span>Still owed (credit)</span><span id="due"></span></div>
     <p><label>Customer</label><select name="customer_id" id="cust"><option value="">Walk-in customer</option>
       {% for c in customers %}<option value="{{ c.id }}">{{ c.name }}{{ ' · ' ~ c.phone if c.phone }}</option>{% endfor %}</select></p>
     <button class="big" style="width:100%" id="paybtn">Complete sale</button>
-    <p class="muted" style="font-size:.85rem">Tip: Enter adds the first match. Leave "Amount paid" empty to take the exact total.</p>
+    <p class="muted" style="font-size:.85rem">Tip: Enter adds the first match. Leave "Amount paid" empty to take the exact total.{% if allow_credit %} For a credit sale choose the customer and type what they pay now (0 if nothing).{% endif %}</p>
+    <input type="hidden" id="credit_ok" value="{{ '1' if allow_credit else '' }}">
   </form>
 </div>
 {% endblock %}

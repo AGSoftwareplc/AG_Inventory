@@ -22,6 +22,18 @@ This table shows how each acceptance criterion is met and how it is checked. The
 | AC-016 | Installs on Windows with only Python, no Docker, no database server | `install.bat` / `start.bat`. The GitHub test run installs and tests on Windows |
 | AC-017 | A double click or page refresh does not record a sale twice | `test_double_submit_records_one_sale` |
 
+### Requirements update v1.1 (`docs/SRS_v1.1_update.md`)
+
+Sections 3 (FIFO batches) and 7 (due and partial payments) are built. The other criteria of the update are pending.
+
+| ID | Criterion | How it is checked |
+|---|---|---|
+| AC-019 | FIFO consumes the oldest (or first expiring) batches first | `test_fifo_sale_takes_oldest_batches_and_costs_them`, `test_expiring_batch_is_sold_first`, `test_transfer_keeps_batches` |
+| AC-020 | Batch purchase costs are reflected in the cost of goods sold | `test_fifo_sale_takes_oldest_batches_and_costs_them`, `test_return_cancel_and_profit`, `test_purchase_return_comes_out_of_its_own_batch`, `test_adjust_a_chosen_batch` |
+| AC-026 | TT Numbers are recorded and can be found again | `test_unpaid_and_partial_sales_with_payment_history`, `test_credit_sales_need_permission`, `test_supplier_partial_payments_with_reference` |
+| AC-029 | Fully paid, partly paid and unpaid sales are handled | `test_unpaid_and_partial_sales_with_payment_history`, `test_credit_sales_need_permission` |
+| (upgrade) | Existing stock becomes opening batches, after a backup | `test_existing_stock_becomes_opening_batches_with_backup` |
+
 ## Requirements coverage
 
 | Area | Requirements | Where |

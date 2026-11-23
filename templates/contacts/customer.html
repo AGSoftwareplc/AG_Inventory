@@ -4,8 +4,10 @@
 <div class="card grid"><div><label>Phone</label>{{ r.phone or '-' }}</div><div><label>Address</label>{{ r.address or '-' }}</div>
 <div><label>Owes</label><b>{{ owes|money if owes > 0 else '0.00' }}</b> {{ currency }}</div>{% if r.notes %}<div class="wide"><label>Notes</label>{{ r.notes }}</div>{% endif %}</div>
 <h2>Purchase history</h2>
-<div class="card tablewrap" style="padding:0"><table><tr><th>Receipt</th><th>Date</th><th>Status</th><th class="n">Total</th><th class="n">Paid</th><th class="n">Owed</th></tr>
-{% for s in hist %}{% set o = s.total - s.refunded - s.paid %}<tr><td>{% if can('sales_view') %}<a href="{{ url_for('sales.view', sid=s.id) }}">{{ s.receipt_no }}</a>{% else %}{{ s.receipt_no }}{% endif %}</td><td>{{ s.date }}</td><td>{{ s.status }}</td>
+<div class="card tablewrap" style="padding:0"><table><tr><th>Receipt</th><th>Date</th><th>Status</th><th>Payment</th><th class="n">Total</th><th class="n">Paid</th><th class="n">Owed</th></tr>
+{% for s in hist %}{% set o = s.total - s.refunded - s.paid %}<tr><td>{% if can('sales_view') %}<a href="{{ url_for('sales.view', sid=s.id) }}">{{ s.receipt_no }}</a>{% else %}{{ s.receipt_no }}{% endif %}</td><td>{{ s.date }}</td><td>{{ s.status }}</td><td>{{ pay_status(s.total - s.refunded, s.paid) if s.status == 'Completed' }}</td>
 <td class="n">{{ s.total|money }}</td><td class="n">{{ s.paid|money }}</td><td class="n">{{ o|money if s.status == 'Completed' and o > 0 }}</td></tr>
-{% else %}<tr><td colspan="6" class="muted">No purchases yet.</td></tr>{% endfor %}</table></div>
+{% else %}<tr><td colspan="7" class="muted">No purchases yet.</td></tr>{% endfor %}</table></div>
+{% if pays %}<h2>Payments received</h2><div class="card tablewrap" style="padding:0"><table><tr><th>Date</th><th>Receipt</th><th>Method</th><th>TT No. / reference</th><th class="n">Amount</th><th>Received by</th></tr>
+{% for p in pays %}<tr><td>{{ p.date }}</td><td>{% if can('sales_view') %}<a href="{{ url_for('sales.view', sid=p.sale_id) }}">{{ p.receipt_no }}</a>{% else %}{{ p.receipt_no }}{% endif %}</td><td>{{ p.method }}</td><td>{{ p.reference }}</td><td class="n">{{ p.amount|money }}</td><td>{{ p.username }}</td></tr>{% endfor %}</table></div>{% endif %}
 {% endblock %}

@@ -1,0 +1,21 @@
+{% extends 'base.html' %}{% block title %}Stock batches{% endblock %}
+{% block content %}
+<div class="head"><h1>Stock batches (FIFO)</h1><a class="btn light" href="{{ url_for('inventory.index') }}">Stock levels</a></div>
+<p class="muted">Each delivery is a batch with its own cost. Sales take from the batch that expires first, then from the oldest batch.</p>
+<form class="filters">
+  <div class="grow"><label>Product, code or reference</label><input name="q" value="{{ q }}"></div>
+  <div><label>Show</label><select name="show">{% for v,l in [('open','In stock'),('expiring','Expiring soon'),('all','All, also used up')] %}<option value="{{ v }}" {{ 'selected' if show == v }}>{{ l }}</option>{% endfor %}</select></div>
+  <div><label>Expiring within (days)</label><input name="days" value="{{ days }}" inputmode="numeric" style="width:90px"></div>
+  <div style="flex:0"><button>Show</button></div>
+</form>
+<div class="card tablewrap" style="padding:0"><table>
+<tr><th>Product</th><th>Batch</th><th>From</th><th>Received</th><th>Expiry</th><th class="n">Qty in</th><th class="n">In stock</th>{% if can('reports') %}<th class="n">Unit cost</th><th class="n">Value</th>{% endif %}</tr>
+{% for b in rows %}{% set expired = b.expiry and b.expiry < today %}
+<tr class="{{ 'low' if expired }}"><td><a href="{{ url_for('products.view', pid=b.product_id) }}">{{ b.name }}</a> <span class="muted">{{ b.code }}</span></td>
+<td><a href="{{ url_for('inventory.batch', bid=b.id) }}">#{{ b.id }}</a></td><td>{{ b.ref_no }}</td><td>{{ b.received }}</td>
+<td>{{ b.expiry or '' }}{% if expired %} <span class="badge err">expired</span>{% endif %}</td>
+<td class="n">{{ b.qty|qty }} {{ b.unit }}</td><td class="n">{{ b.remaining|qty }}</td>
+{% if can('reports') %}<td class="n">{{ b.unit_cost|money }}</td><td class="n">{{ (b.remaining*b.unit_cost)|money }}</td>{% endif %}</tr>
+{% else %}<tr><td colspan="9" class="muted">No batches to show.</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

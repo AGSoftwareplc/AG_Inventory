@@ -21,6 +21,7 @@ PERMS = {
     'returns': 'Process customer returns',
     'sales_cancel': 'Cancel sales',
     'payments': 'Record customer / supplier payments',
+    'credit': 'Sell on credit (unpaid or partly paid sales)',
     'customers': 'Manage customers',
     'products': 'Manage products and categories',
     'inventory': 'View stock and movements',
@@ -34,7 +35,7 @@ PERMS = {
 ADMIN = 'Administrator'
 ROLES = [ADMIN, 'Sales Attendant', 'Inventory Manager']
 DEFAULT_ROLE_PERMS = {
-    'Sales Attendant': ['pos', 'sales_view', 'customers', 'inventory', 'payments'],
+    'Sales Attendant': ['pos', 'sales_view', 'customers', 'inventory', 'payments', 'credit'],
     'Inventory Manager': ['products', 'inventory', 'adjust', 'purchases', 'receive',
                           'suppliers', 'sales_view'],
 }
@@ -92,10 +93,10 @@ def products_select(con, branch_sql):
             'FROM main.products p LEFT JOIN main.product_stock s ON s.product_id=p.id AND s.branch_id=' + branch_sql)
 
 
-BRANCH_TABLES = ('sales', 'purchases', 'expenses', 'returns', 'stock_moves', 'stocktakes')
+BRANCH_TABLES = ('sales', 'purchases', 'expenses', 'returns', 'stock_moves', 'stocktakes', 'stock_batches')
 BRANCH_CHILDREN = (('sale_items', 'sale_id', 'sales'), ('sale_payments', 'sale_id', 'sales'),
                    ('purchase_items', 'purchase_id', 'purchases'), ('purchase_payments', 'purchase_id', 'purchases'),
-                   ('stocktake_items', 'stocktake_id', 'stocktakes'))
+                   ('stocktake_items', 'stocktake_id', 'stocktakes'), ('batch_moves', 'move_id', 'stock_moves'))
 
 
 def report_db(branch):
@@ -155,7 +156,7 @@ def tx(db=None):
         raise
 
 
-def init_db(path, seed_starters=True):
+def init_db(path, seed_starters=True, backup_dir=None):
     """Create a business database's tables and default data if missing. Safe to run on every start."""
     os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
     con = connect(path)
@@ -175,6 +176,11 @@ def init_db(path, seed_starters=True):
     if not con.execute('SELECT 1 FROM product_stock LIMIT 1').fetchone():  # stock from before branches: Main
         con.execute('INSERT INTO product_stock(product_id, branch_id, stock, avg_cost) '
                     'SELECT id, 1, stock, avg_cost FROM products')
+    if not con.execute("SELECT 1 FROM settings WHERE key='credit_perm_added'").fetchone():
+        # selling on credit became its own permission: roles that could sell keep that right
+        con.execute("INSERT OR IGNORE INTO role_permissions SELECT role, 'credit' FROM role_permissions WHERE perm='pos'")
+        con.execute("INSERT INTO settings(key, value) VALUES ('credit_perm_added', '1')")
+    open_batches(con, path, backup_dir)
     if seed_starters:
         seed_users(con)
     # every user works in at least one branch (users from before branches existed: the Main branch)
@@ -229,6 +235,9 @@ MIGRATIONS = [
     ('returns', 'branch_id', 'INTEGER NOT NULL DEFAULT 1'),
     ('audit_log', 'branch_id', 'INTEGER'),
     ('users', 'must_change', 'INTEGER NOT NULL DEFAULT 0'),   # 1 = password was reset; choose a new one at login
+    # FIFO batches and payments: the TT number / bank or mobile reference of each payment
+    ('sale_payments', 'reference', "TEXT NOT NULL DEFAULT ''"),
+    ('purchase_payments', 'reference', "TEXT NOT NULL DEFAULT ''"),
 ]
 DEFAULT_PASSWORD = '123456'   # what "Reset to default password" sets; the user must change it at next login
 
@@ -238,6 +247,41 @@ def migrate(con):
         cols = {r['name'] for r in con.execute(f'PRAGMA table_info({table})')}
         if col not in cols:
             con.execute(f'ALTER TABLE {table} ADD COLUMN {col} {definition}')
+
+
+def open_batches(con, path, backup_dir=None):
+    """Once, when FIFO batches arrive: the stock each branch already holds becomes one opening batch
+    per product at its average cost. A copy of the database is kept first."""
+    if con.execute("SELECT 1 FROM settings WHERE key='batches_ready'").fetchone():
+        return
+    rows = con.execute('SELECT * FROM product_stock WHERE stock > 0.0005').fetchall()
+    if rows and not con.execute('SELECT 1 FROM stock_batches LIMIT 1').fetchone():
+        dest_dir = backup_dir or os.path.join(BASE_DIR, 'backups')
+        os.makedirs(dest_dir, exist_ok=True)
+        name = os.path.splitext(os.path.basename(path))[0]
+        out = sqlite3.connect(os.path.join(dest_dir, f'{name}-before-batches-{datetime.now():%Y%m%d-%H%M%S}.db'))
+        con.backup(out)
+        out.close()
+        day = date.today().isoformat()
+        con.execute('BEGIN IMMEDIATE')
+        try:
+            for r in rows:
+                bid = con.execute("INSERT INTO stock_batches(product_id, branch_id, source, ref_no, received, qty, "
+                                  "remaining, unit_cost) VALUES (?,?,'opening','OPENING',?,?,?,?)",
+                                  (r['product_id'], r['branch_id'], day, r['stock'], r['stock'], r['avg_cost'])).lastrowid
+                mid = con.execute("INSERT INTO stock_moves(product_id, qty, move_type, ref_type, ref_no, unit_cost, "
+                                  "balance, reason, branch_id) VALUES (?, 0, 'batch_open', 'batch', 'OPENING', ?, ?, "
+                                  "'Stock on hand became an opening batch (FIFO)', ?)",
+                                  (r['product_id'], r['avg_cost'], r['stock'], r['branch_id'])).lastrowid
+                con.execute('INSERT INTO batch_moves(batch_id, move_id, qty, unit_cost) VALUES (?,?,?,?)',
+                            (bid, mid, r['stock'], r['avg_cost']))
+            con.execute("INSERT INTO settings(key, value) VALUES ('batches_ready', ?)", (day,))
+            con.execute('COMMIT')
+        except BaseException:
+            con.execute('ROLLBACK')
+            raise
+    else:
+        con.execute("INSERT INTO settings(key, value) VALUES ('batches_ready', ?)", (date.today().isoformat(),))
 
 
 # ---------------------------------------------------------------- businesses (platform)
@@ -275,7 +319,7 @@ def sync_logins(pcon, business_id, bcon):
                      (u['username'], business_id))
 
 
-def init_platform(platform, first_db):
+def init_platform(platform, first_db, backup_dir=None):
     """Create the platform file. The first time, the existing shop becomes business 1 and its
     administrators become Super Admins. Then bring every business database up to date."""
     pcon = connect(platform)
@@ -285,7 +329,7 @@ def init_platform(platform, first_db):
             rel = os.path.relpath(os.path.abspath(first_db), os.path.dirname(os.path.abspath(platform)))
         except ValueError:  # another drive on Windows
             rel = os.path.abspath(first_db)
-        init_db(first_db)
+        init_db(first_db, backup_dir=backup_dir)
         bcon = connect(first_db)
         name = (bcon.execute("SELECT value FROM settings WHERE key='shop_name'").fetchone() or ['My Shop'])[0]
         pcon.execute("INSERT INTO businesses(id, code, name, db_file) VALUES (1, 'MAIN', ?, ?)", (name, rel))
@@ -295,7 +339,7 @@ def init_platform(platform, first_db):
         bcon.close()
     for b in pcon.execute('SELECT * FROM businesses').fetchall():
         path = business_file(platform, b)
-        init_db(path, seed_starters=(b['id'] == 1))
+        init_db(path, seed_starters=(b['id'] == 1), backup_dir=backup_dir)
         bcon = connect(path)
         sync_logins(pcon, b['id'], bcon)
         bcon.close()
@@ -462,6 +506,7 @@ def restore_db(uploaded_path):
     for ext in ('-wal', '-shm'):
         if os.path.exists(db_path() + ext):
             os.remove(db_path() + ext)
+    init_db(db_path(), seed_starters=False)  # an older backup gets the newer tables (and opening batches)
 
 
 # ---------------------------------------------------------------- numbers

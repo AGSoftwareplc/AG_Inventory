@@ -72,7 +72,10 @@ def supplier(rid):
     hist = db.execute('SELECT * FROM purchases WHERE supplier_id=? ORDER BY id DESC', (rid,)).fetchall()
     owed = sum(p['total'] - p['returned_value'] - p['paid'] for p in hist
                if p['status'] not in ('Draft', 'Cancelled'))
-    return render_template('contacts/supplier.html', r=r, hist=hist, owed=owed)
+    pays = db.execute('SELECT pp.*, p.ref_no, u.username FROM purchase_payments pp JOIN purchases p ON '
+                      'p.id=pp.purchase_id LEFT JOIN users u ON u.id=pp.user_id WHERE p.supplier_id=? '
+                      'ORDER BY pp.id DESC LIMIT 200', (rid,)).fetchall()
+    return render_template('contacts/supplier.html', r=r, hist=hist, owed=owed, pays=pays)
 
 
 # ---------------------------------------------------------------- customers
@@ -110,4 +113,9 @@ def customer(rid):
         return fail('Customer not found.', 'contacts.customers')
     hist = db.execute('SELECT * FROM sales WHERE customer_id=? ORDER BY id DESC', (rid,)).fetchall()
     owes = sum(s['total'] - s['refunded'] - s['paid'] for s in hist if s['status'] == 'Completed')
-    return render_template('contacts/customer.html', r=r, hist=hist, owes=owes)
+    pays = db.execute('SELECT sp.*, s.receipt_no, u.username FROM sale_payments sp JOIN sales s ON s.id=sp.sale_id '
+                      'LEFT JOIN users u ON u.id=sp.user_id WHERE s.customer_id=? ORDER BY sp.id DESC LIMIT 200',
+                      (rid,)).fetchall()
+    import rules
+    return render_template('contacts/customer.html', r=r, hist=hist, owes=owes, pays=pays,
+                           pay_status=rules.payment_status)

@@ -3,12 +3,13 @@
 <div class="head"><h1>Adjust stock</h1><a class="btn light" href="{{ url_for('inventory.index') }}">Back to inventory</a></div>
 <form method="post" class="card">{{ csrf() }}
 <div class="grid">
-  <div class="wide"><label>Product *</label><select name="product_id" required><option value="">Choose…</option>
+  <div class="wide"><label>Product *</label><select name="product_id" id="pid" required><option value="">Choose…</option>
   {% for p in products %}<option value="{{ p.id }}" {{ 'selected' if sel == p.id }}>{{ p.name }} ({{ p.code }}), in stock {{ p.stock|qty }} {{ p.unit }}</option>{% endfor %}</select></div>
   <div><label>Type *</label><select name="kind" id="kind">
     <option value="damaged">Damaged (remove)</option><option value="expired">Expired (remove)</option>
     <option value="lost">Lost / missing (remove)</option><option value="correction">Correction (+ add / − remove)</option></select></div>
   <div><label>Quantity * <span class="muted" id="qhint">(how many to remove)</span></label><input name="qty" inputmode="decimal" required></div>
+  <div class="wide"><label>Batch <span class="muted">(optional: for example the batch that expired)</span></label><select name="batch_id" id="batch" data-sel="{{ request.args.get('batch', '') }}"><option value="">Automatic (FIFO: expiring / oldest first)</option></select></div>
   <div class="wide"><label>Reason *</label><input name="reason" required placeholder="e.g. broken during unloading"></div>
 </div>
 <div class="actions"><button>Save adjustment</button></div>
@@ -19,6 +20,25 @@
 {% else %}<tr><td colspan="6" class="muted">None yet.</td></tr>{% endfor %}</table></div>
 {% endblock %}
 {% block scripts %}<script>
+(function () {
+  var pid = document.getElementById('pid'), sel = document.getElementById('batch');
+  function load() {
+    sel.length = 1;
+    if (!pid.value) return;
+    fetch("{{ url_for('inventory.api_batches') }}?pid=" + pid.value, {credentials: 'same-origin'})
+      .then(function (r) { return r.json(); }).then(function (list) {
+        list.forEach(function (b) {
+          var o = document.createElement('option');
+          o.value = b.id;
+          o.textContent = '#' + b.id + ' ' + b.ref_no + ', received ' + b.received + (b.expiry ? ', expires ' + b.expiry : '') + ', in stock ' + b.remaining;
+          if (String(b.id) === sel.dataset.sel) o.selected = true;
+          sel.appendChild(o);
+        });
+      });
+  }
+  pid.addEventListener('change', load);
+  load();
+})();
 document.getElementById('kind').addEventListener('change', function () {
   document.getElementById('qhint').textContent = this.value === 'correction'
     ? '(positive adds, negative removes, e.g. -2)' : '(how many to remove)';

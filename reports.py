@@ -376,10 +376,88 @@ def r_outstanding(db, s, e, f):
 
 
 def r_customer_balances(db, s, e, f):
-    rows = db.execute("SELECT c.name, c.phone, COUNT(s.id) AS n, SUM(s.total-s.refunded-s.paid) AS bal FROM "
-                      "sales s JOIN customers c ON c.id=s.customer_id WHERE s.status='Completed' AND "
-                      "s.total-s.refunded-s.paid>0 GROUP BY c.id ORDER BY bal DESC").fetchall()
-    return [('Customer', 'name', T), ('Phone', 'phone', T), ('Unpaid sales', 'n', N), ('Owes', 'bal', M)], rows
+    rows = db.execute("SELECT c.name, c.phone, COUNT(s.id) AS n, SUM(CASE WHEN s.paid<=0 THEN 1 ELSE 0 END) AS unpaid, "
+                      "SUM(s.total-s.refunded) AS due, SUM(s.paid) AS paid, SUM(s.total-s.refunded-s.paid) AS bal, "
+                      "MIN(s.date) AS oldest FROM sales s JOIN customers c ON c.id=s.customer_id WHERE s.status='Completed' "
+                      "AND s.total-s.refunded-s.paid>0 GROUP BY c.id ORDER BY bal DESC").fetchall()
+    return [('Customer', 'name', T), ('Phone', 'phone', T), ('Sales owing', 'n', N), ('of which unpaid', 'unpaid', N),
+            ('Amount due', 'due', M), ('Paid so far', 'paid', M), ('Owes', 'bal', M), ('Oldest sale', 'oldest', T)], rows
+
+
+def r_sales_payment(db, s, e, f):
+    rows = [dict(r, pay=rules.payment_status(r['total'] - r['refunded'], r['paid']), bal=r['total'] - r['refunded'] - r['paid'])
+            for r in db.execute("SELECT s.date, s.receipt_no, c.name AS customer, s.total, s.refunded, s.paid, u.username, "
+                                "(SELECT group_concat(reference, ', ') FROM sale_payments sp WHERE sp.sale_id=s.id AND "
+                                "reference<>'') AS refs FROM sales s LEFT JOIN customers c ON c.id=s.customer_id LEFT JOIN "
+                                "users u ON u.id=s.user_id WHERE s.status='Completed' AND s.date BETWEEN ? AND ? ORDER BY s.id",
+                                (s, e))]
+    return [('Date', 'date', T), ('Receipt', 'receipt_no', T), ('Customer', 'customer', T), ('Total', 'total', M),
+            ('Returns', 'refunded', M), ('Paid', 'paid', M), ('Balance', 'bal', M), ('Payment', 'pay', T),
+            ('TT No. / reference', 'refs', T), ('Sold by', 'username', T)], rows
+
+
+def r_customer_payments(db, s, e, f):
+    rows = db.execute("SELECT sp.date, s.receipt_no, c.name AS customer, sp.method, sp.reference, sp.amount, u.username "
+                      "FROM sale_payments sp JOIN sales s ON s.id=sp.sale_id LEFT JOIN customers c ON c.id=s.customer_id "
+                      "LEFT JOIN users u ON u.id=sp.user_id WHERE s.status='Completed' AND sp.date BETWEEN ? AND ? "
+                      "ORDER BY sp.id", (s, e)).fetchall()
+    return [('Date', 'date', T), ('Receipt', 'receipt_no', T), ('Customer', 'customer', T), ('Method', 'method', T),
+            ('TT No. / reference', 'reference', T), ('Amount', 'amount', M), ('Received by', 'username', T)], rows
+
+
+def r_supplier_balances(db, s, e, f):
+    w, a = _purch_where(f)
+    rows = db.execute('SELECT s.name, s.phone, COUNT(*) AS n, SUM(p.total-p.returned_value) AS due, SUM(p.paid) AS paid, '
+                      'SUM(p.total-p.returned_value-p.paid) AS bal, MIN(p.date) AS oldest FROM purchases p JOIN suppliers s '
+                      'ON s.id=p.supplier_id WHERE p.total-p.returned_value-p.paid>0' + w +
+                      ' GROUP BY s.id ORDER BY bal DESC', a).fetchall()
+    return [('Supplier', 'name', T), ('Phone', 'phone', T), ('Purchases owing', 'n', N), ('Amount due', 'due', M),
+            ('Paid so far', 'paid', M), ('We owe', 'bal', M), ('Oldest purchase', 'oldest', T)], rows
+
+
+def r_supplier_payments(db, s, e, f):
+    w, a = _purch_where(f)
+    rows = db.execute('SELECT pp.date, p.ref_no, s.name AS supplier, pp.method, pp.reference, pp.amount, u.username '
+                      'FROM purchase_payments pp JOIN purchases p ON p.id=pp.purchase_id JOIN suppliers s ON '
+                      's.id=p.supplier_id LEFT JOIN users u ON u.id=pp.user_id WHERE pp.date BETWEEN ? AND ?' + w +
+                      ' ORDER BY pp.id', [s, e] + a).fetchall()
+    return [('Date', 'date', T), ('Purchase', 'ref_no', T), ('Supplier', 'supplier', T), ('Method', 'method', T),
+            ('TT No. / reference', 'reference', T), ('Amount', 'amount', M), ('By', 'username', T)], rows
+
+
+def r_batches(db, s, e, f):
+    sql = ("SELECT p.code, p.name, b.id AS batch, b.ref_no, b.received, b.expiry, b.qty, b.remaining, b.unit_cost, "
+           "b.remaining*b.unit_cost AS value FROM stock_batches b JOIN products p ON p.id=b.product_id "
+           "WHERE b.remaining>0.0005")
+    args = []
+    if f['category']:
+        sql += ' AND p.category_id=?'
+        args.append(f['category'])
+    if f['product']:
+        sql += ' AND p.id=?'
+        args.append(f['product'])
+    rows = db.execute(sql + " ORDER BY p.name, CASE WHEN b.expiry IS NULL OR b.expiry='' THEN 1 ELSE 0 END, b.expiry, "
+                      "b.received, b.id", args).fetchall()
+    return [('Code', 'code', T), ('Product', 'name', T), ('Batch', 'batch', N), ('From', 'ref_no', T),
+            ('Received', 'received', T), ('Expiry', 'expiry', T), ('Qty in', 'qty', Q), ('In stock', 'remaining', Q),
+            ('Unit cost', 'unit_cost', M), ('Value', 'value', M)], rows
+
+
+def r_batch_cogs(db, s, e, f):
+    """Cost of goods sold, batch by batch (FIFO): which delivery each sale was taken from."""
+    sql = ("SELECT date(m.at) AS day, m.ref_no, p.code, p.name, b.id AS batch, b.ref_no AS bref, b.received, "
+           "-bm.qty-bm.back_qty AS qty, bm.unit_cost, (-bm.qty-bm.back_qty)*bm.unit_cost AS cost FROM batch_moves bm "
+           "JOIN stock_moves m ON m.id=bm.move_id JOIN stock_batches b ON b.id=bm.batch_id JOIN products p ON "
+           "p.id=m.product_id JOIN sales sa ON m.ref_type='sale' AND sa.id=m.ref_id WHERE m.move_type='sale' AND "
+           "bm.qty<0 AND sa.status='Completed' AND sa.date BETWEEN ? AND ?")
+    args = [s, e]
+    if f['product']:
+        sql += ' AND p.id=?'
+        args.append(f['product'])
+    rows = db.execute(sql + ' ORDER BY bm.id', args).fetchall()
+    return [('Date', 'day', T), ('Receipt', 'ref_no', T), ('Code', 'code', T), ('Product', 'name', T),
+            ('Batch', 'batch', N), ('Batch from', 'bref', T), ('Received', 'received', T), ('Qty (net of returns)', 'qty', Q),
+            ('Unit cost', 'unit_cost', M), ('Cost of goods', 'cost', M)], rows
 
 
 def r_profit(db, s, e, f):
@@ -450,6 +528,7 @@ def r_branch_stock(db, s, e, f):
 
 REPORTS = {
     'Inventory': [('stock', 'Current stock and valuation', r_stock), ('low', 'Low stock', r_low),
+                  ('batches', 'Stock batches (FIFO) and expiry', r_batches),
                   ('moves', 'Stock movements', r_moves),
                   ('writeoffs', 'Damaged / expired / lost', r_writeoffs),
                   ('stocktake', 'Stocktaking differences', r_stocktake)],
@@ -458,11 +537,16 @@ REPORTS = {
               ('sales_category', 'Sales by category', r_sales_category),
               ('sales_user', 'Sales by user', r_sales_user), ('returns', 'Returns', r_returns),
               ('cancelled', 'Cancelled sales', r_cancelled),
-              ('customer_balances', 'Customer balances (credit)', r_customer_balances)],
+              ('sales_payment', 'Sales by payment status (paid / partly / unpaid)', r_sales_payment),
+              ('customer_payments', 'Customer payments (with TT No.)', r_customer_payments),
+              ('customer_balances', 'Outstanding customer balances', r_customer_balances),
+              ('batch_cogs', 'Cost of goods sold by batch (FIFO)', r_batch_cogs)],
     'Purchases': [('purch_history', 'Purchase history', r_purch_history),
                   ('purch_supplier', 'Purchases by supplier', r_purch_supplier),
                   ('purch_product', 'Purchases by product', r_purch_product),
-                  ('outstanding', 'Outstanding supplier payments', r_outstanding)],
+                  ('outstanding', 'Outstanding supplier payments', r_outstanding),
+                  ('supplier_balances', 'Outstanding supplier balances', r_supplier_balances),
+                  ('supplier_payments', 'Supplier payments (with TT No.)', r_supplier_payments)],
     'Financial': [('profit', 'Profit summary', r_profit), ('expenses', 'Expenses by category', r_expenses),
                   ('expense_list', 'Expense list', r_expense_list),
                   ('collections', 'Payment collection', r_collections)],
@@ -475,7 +559,7 @@ ALL = {k: (title, fn) for group in REPORTS.values() for k, title, fn in group}
 
 def totals(cols, rows):
     """Sum money/qty columns, except balances and per-unit values."""
-    skip = {'balance', 'avg_cost', 'price', 'unit_cost', 'min_stock', 'system_qty', 'counted_qty'}
+    skip = {'balance', 'avg_cost', 'price', 'unit_cost', 'min_stock', 'system_qty', 'counted_qty', 'batch'}
     out = {}
     for _l, k, kind in cols:
         if kind in (M, Q, N) and k not in skip:

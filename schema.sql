@@ -257,4 +257,35 @@ CREATE TABLE IF NOT EXISTS audit_log (
   at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
 
+-- FIFO stock batches: every delivery (or other stock coming in) is a batch with its own cost.
+-- Sales and other stock going out take from the batch that expires first, then the oldest one.
+CREATE TABLE IF NOT EXISTS stock_batches (
+  id INTEGER PRIMARY KEY,
+  product_id INTEGER NOT NULL REFERENCES products(id),
+  branch_id INTEGER NOT NULL DEFAULT 1,
+  source TEXT NOT NULL,                  -- purchase, opening, transfer_in, correction, stocktake, ...
+  ref_id INTEGER,
+  ref_no TEXT NOT NULL DEFAULT '',
+  purchase_item_id INTEGER REFERENCES purchase_items(id),
+  received TEXT NOT NULL,                -- date the stock came in (FIFO order)
+  expiry TEXT,                           -- optional expiry date: sold before batches that expire later
+  qty REAL NOT NULL,                     -- quantity that came in
+  remaining REAL NOT NULL,               -- quantity still in stock
+  unit_cost REAL NOT NULL,               -- cents
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+CREATE INDEX IF NOT EXISTS ix_batches_open ON stock_batches(product_id, branch_id, remaining);
+CREATE INDEX IF NOT EXISTS ix_batches_item ON stock_batches(purchase_item_id);
+
+CREATE TABLE IF NOT EXISTS batch_moves (   -- which batches each stock movement used, at which cost
+  id INTEGER PRIMARY KEY,
+  batch_id INTEGER NOT NULL REFERENCES stock_batches(id),
+  move_id INTEGER NOT NULL REFERENCES stock_moves(id),
+  qty REAL NOT NULL,                     -- signed: + into the batch, - out of it
+  unit_cost REAL NOT NULL,
+  back_qty REAL NOT NULL DEFAULT 0       -- for a - line: how much has since come back (return / cancel)
+);
+CREATE INDEX IF NOT EXISTS ix_bmoves_move ON batch_moves(move_id);
+CREATE INDEX IF NOT EXISTS ix_bmoves_batch ON batch_moves(batch_id);
+
 CREATE TABLE IF NOT EXISTS used_tokens (token TEXT PRIMARY KEY);
