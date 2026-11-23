@@ -4,6 +4,8 @@ Other computers, tablets and phones on the same Wi-Fi open http://<this-PC-IP>:5
 """
 import os
 import socket
+import threading
+import webbrowser
 
 from waitress import serve
 
@@ -22,4 +24,8 @@ if __name__ == '__main__':
     print(f'  On this computer:      http://localhost:{port}')
     print(f'  Other devices (Wi-Fi): http://{ip}:{port}')
     print('Keep this window open. Press Ctrl+C to stop.')
-    serve(create_app(), host='0.0.0.0', port=port, threads=8)
+    app = create_app()
+    if os.environ.get('AGINV_NO_BROWSER') != '1':
+        # open the app in the browser once the server has had a moment to start
+        threading.Timer(1.5, lambda: webbrowser.open(f'http://localhost:{port}')).start()
+    serve(app, host='0.0.0.0', port=port, threads=8)

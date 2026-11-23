@@ -16,8 +16,11 @@
 <form class="filters">{% include '_range.html' %}
 <div><label>Category</label><select name="cat"><option value="">All</option>{% for c in cats %}<option value="{{ c.id }}" {{ 'selected' if cat == c.id }}>{{ c.name }}</option>{% endfor %}</select></div>
 <div style="flex:0"><button>Show</button></div></form>
-<div class="card tablewrap" style="padding:0"><table><tr><th>Ref</th><th>Date</th><th>Category</th><th>Description</th><th>Method</th><th>By</th><th class="n">Amount</th></tr>
-{% for e in rows %}<tr><td>{{ e.ref_no }}</td><td>{{ e.date }}</td><td>{{ e.cat }}</td><td>{{ e.description }}</td><td>{{ e.method }}</td><td>{{ e.username }}</td><td class="n">{{ e.amount|money }}</td></tr>
-{% else %}<tr><td colspan="7" class="muted">No expenses in this period.</td></tr>{% endfor %}
-<tr class="total"><td colspan="6">Total</td><td class="n">{{ total|money }}</td></tr></table></div>
+<div class="card tablewrap" style="padding:0"><table><tr><th>Ref</th><th>Date</th><th>Category</th><th>Description</th><th>Method</th><th>By</th><th class="n">Amount</th><th class="noprint"></th></tr>
+{% for e in rows %}<tr><td>{{ e.ref_no }}</td><td>{{ e.date }}</td><td>{{ e.cat }}</td><td>{{ e.description }}</td><td>{{ e.method }}</td><td>{{ e.username }}</td><td class="n">{{ e.amount|money }}</td>
+<td class="noprint">{% if e.reversed_by %}<span class="badge">reversed by {{ e.reversed_by }}</span>{% elif not e.reversal_of and e.amount > 0 %}
+<details><summary class="muted" style="cursor:pointer">Reverse</summary><form method="post" action="{{ url_for('expenses.reverse', eid=e.id) }}" style="margin-top:.3rem">{{ csrf() }}{{ once() }}
+<input name="reason" placeholder="Reason (e.g. wrong amount)" required style="min-width:180px"><button class="small danger" style="margin-top:.3rem">Reverse expense</button></form></details>{% endif %}</td></tr>
+{% else %}<tr><td colspan="8" class="muted">No expenses in this period.</td></tr>{% endfor %}
+<tr class="total"><td colspan="6">Total</td><td class="n">{{ total|money }}</td><td></td></tr></table></div>
 {% endblock %}

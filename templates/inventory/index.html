@@ -9,7 +9,7 @@
   <div><label><input type="checkbox" name="low" value="1" {{ 'checked' if low }}> Low stock only</label></div>
   <div style="flex:0"><button>Show</button></div>
 </form>
-{% if can('reports') %}<p><b>Stock value at average cost:</b> {{ value|money }} {{ currency }}</p>{% endif %}
+{% if can('reports') %}<p><b>Total stock value at average cost:</b> {{ value|money }} {{ currency }}</p>{% endif %}
 <div class="card tablewrap" style="padding:0"><table>
 <tr><th>Code</th><th>Product</th><th>Category</th><th class="n">Stock</th><th class="n">Minimum</th>{% if can('reports') %}<th class="n">Avg cost</th><th class="n">Value</th>{% endif %}<th></th></tr>
 {% for p in rows %}{% set lowp = p.min_stock > 0 and p.stock <= p.min_stock %}
@@ -19,4 +19,5 @@
 <td class="n">{% if can('adjust') %}<a href="{{ url_for('inventory.adjust', pid=p.id) }}">Adjust</a>{% endif %}</td></tr>
 {% else %}<tr><td colspan="8" class="muted">Nothing to show.</td></tr>{% endfor %}
 </table></div>
+{% if rows|length == 2000 %}<p class="muted">Showing the first 2000 products. Use search or category to narrow down.</p>{% endif %}
 {% endblock %}

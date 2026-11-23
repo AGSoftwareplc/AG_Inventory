@@ -100,6 +100,7 @@ def init_db(path):
     con = connect(path)
     with open(os.path.join(BASE_DIR, 'schema.sql'), encoding='utf-8') as f:
         con.executescript(f.read())
+    migrate(con)
     for k, v in DEFAULT_SETTINGS.items():
         con.execute('INSERT OR IGNORE INTO settings(key, value) VALUES (?, ?)', (k, v))
     if not con.execute('SELECT 1 FROM role_permissions LIMIT 1').fetchone():
@@ -113,6 +114,19 @@ def init_db(path):
         con.execute('INSERT INTO users(username, full_name, password_hash, role) VALUES (?,?,?,?)',
                     ('admin', 'Administrator', generate_password_hash('admin123'), ADMIN))
     con.close()
+
+
+# Columns added after version 1.0: (table, column, definition). Applied once to older databases.
+MIGRATIONS = [
+    ('expenses', 'reversal_of', 'INTEGER REFERENCES expenses(id)'),
+]
+
+
+def migrate(con):
+    for table, col, definition in MIGRATIONS:
+        cols = {r['name'] for r in con.execute(f'PRAGMA table_info({table})')}
+        if col not in cols:
+            con.execute(f'ALTER TABLE {table} ADD COLUMN {col} {definition}')
 
 
 def setting(key):
