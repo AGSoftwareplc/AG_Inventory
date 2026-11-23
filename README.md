@@ -28,7 +28,15 @@ sudo apt install python3 python3-venv   # if Python is not installed yet
 
 Keep the window open while the shop is working. The window shows the address that other devices on the Wi-Fi should use, for example `http://192.168.1.10:5000`. The first time, Windows may ask whether to allow Python through the firewall. Choose **Allow** for private networks.
 
-**First login:** username `admin`, password `admin123`. **Change this password right away** (top right, *Password*). Then go to **Admin → Settings** to enter the shop name, address and phone.
+**Starter logins**, one per role:
+
+| Role | Username | Password |
+|---|---|---|
+| Administrator | `admin` | `admin123` |
+| Sales Attendant | `cashier` | `cashier123` |
+| Inventory Manager | `storekeeper` | `store123` |
+
+**Change these passwords right away.** Each user sees a warning until they do. Then go to **⚙ Admin → Settings** to enter the shop name, address and phone.
 
 ## Daily use
 

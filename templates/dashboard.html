@@ -1,6 +1,6 @@
 {% extends 'base.html' %}{% block title %}Dashboard{% endblock %}
 {% block content %}
-{% if weak %}<div class="flash error">Security: you are still using the default password "admin123". <a href="{{ url_for('auth.password') }}">Change it now</a>.</div>{% endif %}
+{% if weak %}<div class="flash error">Security: you are still using the starter password for "{{ g.user.username }}". <a href="{{ url_for('auth.password') }}">Change it now</a>.</div>{% endif %}
 <div class="head"><h1>Dashboard</h1>
 <form class="filters noprint" style="margin:0">{% include '_range.html' %}<div style="flex:0"><button>Show</button></div></form></div>
 <p class="muted">{{ 'Today' if start == end and start == today else start ~ ' to ' ~ end }}</p>

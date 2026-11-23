@@ -5,9 +5,8 @@ from datetime import date
 from xml.sax.saxutils import escape
 
 from flask import Blueprint, Response, g, render_template, request
-from werkzeug.security import check_password_hash
 
-from core import ADMIN, can, date_range, get_db, login_required, requires, setting
+from core import can, date_range, get_db, login_required, requires, setting, uses_starter_password
 import rules
 
 dash = Blueprint('dash', __name__)
@@ -38,7 +37,7 @@ def index():
                       "s.id=i.sale_id JOIN products p ON p.id=i.product_id WHERE s.status='Completed' "
                       "AND s.date BETWEEN ? AND ? GROUP BY p.id ORDER BY v DESC LIMIT 10",
                       (start, end)).fetchall()
-    weak = g.user['role'] == ADMIN and check_password_hash(g.user['password_hash'], 'admin123')
+    weak = uses_starter_password(g.user)
     return render_template('dashboard.html', d=d, p=p, low=low, best=best, start=start, end=end, today=t, weak=weak,
                            show_money=can('reports'))
 
