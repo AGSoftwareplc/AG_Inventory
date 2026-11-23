@@ -14,6 +14,7 @@
   <div style="flex:0"><button type="button" class="light" onclick="window.print()">Print / PDF</button></div>
 </form>
 <div class="card">
+  <div class="print-only">{% include '_bizhead.html' %}</div>
   <h2 style="margin-top:0">{{ title }}</h2>
   <p class="muted">{{ setting('shop_name') }} · {% if key not in ('stock','low','customer_balances','outstanding') %}{{ start }} to {{ end }} · {% endif %}amounts in {{ currency }}</p>
   <div class="tablewrap"><table>

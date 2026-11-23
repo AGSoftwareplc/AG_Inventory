@@ -18,6 +18,17 @@ h2 { font-size: 1.1rem; margin: 1.2rem 0 .6rem; }
   padding: 0 1rem; height: 52px; position: sticky; top: 0; z-index: 20; }
 .top .shop { font-weight: 700; color: #fff; font-size: 1.05rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .top .spacer { flex: 1; }
+.top .shop { display: flex; align-items: center; gap: .5rem; min-width: 0; }
+.top .shop span { overflow: hidden; text-overflow: ellipsis; }
+.toplogo { height: 34px; max-width: 90px; object-fit: contain; background: #fff; border-radius: 6px; padding: 2px; }
+.branchpick select { background: rgba(255,255,255,.15); color: #fff; border: 1px solid rgba(255,255,255,.5); border-radius: 7px;
+  padding: .25rem .5rem; font-size: .88rem; max-width: 200px; width: auto; }
+.branchpick select option { color: var(--text); background: #fff; }
+.branchname { font-size: .88rem; opacity: .95; white-space: nowrap; }
+.headlogo { max-height: 70px; max-width: 220px; object-fit: contain; display: block; margin: 0 auto .4rem; }
+.logo-preview { display: block; max-height: 60px; max-width: 200px; margin: .3rem 0; border: 1px solid var(--line); border-radius: 6px; padding: 3px; background: #fff; }
+.checks { display: flex; flex-wrap: wrap; gap: .4rem 1.2rem; }
+label.inline { display: inline-flex; align-items: center; gap: .35rem; font-weight: 400; }
 .top .user { white-space: nowrap; font-size: .9rem; }
 .top .user a { color: #fff; opacity: .9; margin-left: .5rem; }
 .adminlink { color: #fff; padding: .3rem .6rem; border: 1px solid rgba(255,255,255,.6); border-radius: 7px; white-space: nowrap; }

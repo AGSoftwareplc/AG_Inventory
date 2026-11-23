@@ -42,7 +42,11 @@
 <script>try { if (localStorage.getItem('navMini') === '1') document.body.classList.add('mini'); } catch (e) {}</script>
 <header class="top">
   <label for="navtoggle" class="burger" aria-label="Menu">☰</label>
-  <a class="shop" href="{{ url_for('dash.index') }}">{{ setting('shop_name') }}</a>
+  <a class="shop" href="{{ url_for('dash.index') }}">{% if setting('logo_file') %}<img src="{{ url_for('auth.logo') }}" alt="" class="toplogo">{% endif %}<span>{{ setting('shop_name') }}</span></a>
+  {% if g.branch %}{% if g.branches|length > 1 %}<form method="post" action="{{ url_for('auth.switch_branch') }}" class="branchpick" title="Branch you are working in">{{ csrf() }}
+    <input type="hidden" name="next" value="{{ request.full_path if request.method == 'GET' else '' }}">
+    <select name="branch" onchange="this.form.submit()" aria-label="Branch">{% for b in g.branches %}<option value="{{ b.id }}" {{ 'selected' if b.id == g.branch.id }}>📍 {{ b.name }}</option>{% endfor %}</select></form>
+  {% else %}<span class="branchname" title="Branch you are working in">📍 {{ g.branch.name }}</span>{% endif %}{% endif %}
   <div class="spacer"></div>
   {% if g.user.role == 'Administrator' %}<a class="adminlink {{ 'on' if ep.startswith('admin.') }}" href="{{ url_for('admin.users') }}" title="Users, permissions, settings, backup">⚙ Admin</a>{% endif %}
   <button type="button" class="helpbtn" onclick="openHelp()" title="Help (F1)">? Help</button>

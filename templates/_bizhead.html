@@ -1,0 +1,9 @@
+{# Business letterhead for receipts and printed reports #}
+<div class="shophead">
+  {% if setting('logo_file') %}<img src="{{ url_for('auth.logo') }}" alt="" class="headlogo">{% endif %}
+  <h2>{{ setting('shop_name') }}</h2>
+  {% if setting('shop_address') %}<div>{{ setting('shop_address') }}</div>{% endif %}
+  <div>{{ [setting('shop_phone'), setting('shop_email')]|select|join(' · ') }}</div>
+  {% if setting('shop_tin') %}<div>TIN: {{ setting('shop_tin') }}</div>{% endif %}
+  {% if g.branch %}<div class="muted">Branch: {{ g.branch.name }}{% if g.branch.address %}, {{ g.branch.address }}{% endif %}</div>{% endif %}
+</div>

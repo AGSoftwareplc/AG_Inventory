@@ -7,6 +7,9 @@
 <div><label>Role *</label><select name="role">{% for r in roles %}<option {{ 'selected' if (f.role or (u.role if u else 'Sales Attendant')) == r }}>{{ r }}</option>{% endfor %}</select></div>
 <div><label>{{ 'New password (leave empty to keep)' if u else 'Password * (6+ characters)' }}</label><input type="password" name="password" autocomplete="new-password" {{ '' if u else 'required' }}></div>
 <div><label><input type="checkbox" name="active" value="1" {{ 'checked' if (not u or u.active) }}> Active (can log in)</label></div>
+<div class="wide"><label>Works in these branches{{ ' *' }}</label>
+  <div class="checks">{% for br in branches %}<label class="inline"><input type="checkbox" name="branch" value="{{ br.id }}" {{ 'checked' if br.id in mine }}> {{ br.name }}{% if not br.active %} (closed){% endif %}</label>{% endfor %}</div>
+  <small class="muted">Administrators can work in every branch.</small></div>
 </div><div class="actions"><button>Save user</button> <a class="btn light" href="{{ url_for('admin.users') }}">Cancel</a></div></form>
 <p class="muted">What each role may do is set under <a href="{{ url_for('admin.roles') }}">Role permissions</a>. Administrators can do everything.</p>
 {% endblock %}
