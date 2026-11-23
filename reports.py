@@ -1,7 +1,7 @@
 """Dashboard and reports (on screen, print / PDF, and Excel export)."""
 import io
 import zipfile
-from datetime import date
+from datetime import date, timedelta
 from xml.sax.saxutils import escape
 
 from flask import Blueprint, Response, g, render_template, request
@@ -38,8 +38,106 @@ def index():
                       "AND s.date BETWEEN ? AND ? GROUP BY p.id ORDER BY v DESC LIMIT 10",
                       (start, end)).fetchall()
     weak = uses_starter_password(g.user)
+    money = can('reports')
+    charts = {'trend': sales_trend(db, start, end, money)}
+    if money:
+        charts['pay'] = donut(db.execute(
+            'SELECT sp.method AS k, SUM(sp.amount) AS v FROM sale_payments sp JOIN sales s ON s.id=sp.sale_id '
+            "WHERE s.status='Completed' AND sp.date BETWEEN ? AND ? GROUP BY sp.method", (start, end)))
+        charts['cats'] = donut(db.execute(
+            "SELECT COALESCE(c.name, 'No category') AS k, SUM(p.stock*p.avg_cost) AS v FROM products p "
+            'LEFT JOIN categories c ON c.id=p.category_id WHERE p.active=1 AND p.stock>0 GROUP BY k'))
+        top = max(p['net_sales'], p['cogs'], p['expenses'], abs(p['net_profit']), 1)
+        charts['flow'] = [(label, v, 100 * abs(v) / top, css) for label, v, css in (
+            ('Net sales', p['net_sales'], 's1'), ('Cost of goods sold', p['cogs'], 's2'),
+            ('Expenses', p['expenses'], 's4'), ('Net profit', p['net_profit'], 'good' if p['net_profit'] >= 0 else 'bad'))]
+    key = 'v' if money else 'q'
+    top = max([r[key] for r in best] + [1])
+    charts['best'] = [(r, 100 * r[key] / top) for r in best]
     return render_template('dashboard.html', d=d, p=p, low=low, best=best, start=start, end=end, today=t, weak=weak,
-                           show_money=can('reports'))
+                           show_money=money, charts=charts, short=short)
+
+
+# ---------------------------------------------------------------- dashboard charts (plain SVG/HTML, no library)
+def short(v, money=True):
+    """Compact axis label: 1234500 cents -> '12.3k'."""
+    v = v / 100 if money else v
+    for div, suffix in ((1e6, 'M'), (1e3, 'k')):
+        if abs(v) >= div:
+            return f'{v / div:.1f}'.rstrip('0').rstrip('.') + suffix
+    return f'{v:.0f}'
+
+
+def sales_trend(db, start, end, money):
+    """Net sales (or number of sales) per day; the last 14 days when one day is chosen; by month over 62 days."""
+    e = date.fromisoformat(end)
+    s = date.fromisoformat(start)
+    if s >= e:
+        s = e - timedelta(days=13)
+    monthly = (e - s).days > 62
+    fmt = '%Y-%m' if monthly else '%Y-%m-%d'
+    keys = []
+    d = s
+    while d <= e:
+        k = d.strftime(fmt)
+        if k not in keys:
+            keys.append(k)
+        d += timedelta(days=1)
+    part = 'substr(date,1,7)' if monthly else 'date'
+    vals = dict.fromkeys(keys, 0)
+    rows = db.execute(f"SELECT {part} AS k, SUM(total) AS v, COUNT(*) AS n FROM sales WHERE status='Completed' "
+                      f'AND date BETWEEN ? AND ? GROUP BY k', (s.isoformat(), end))
+    for r in rows:
+        vals[r['k']] = r['v'] if money else r['n']
+    if money:
+        for r in db.execute(f"SELECT {part} AS k, SUM(amount) AS v FROM returns WHERE kind='sale' "
+                            f'AND date BETWEEN ? AND ? GROUP BY k', (s.isoformat(), end)):
+            vals[r['k']] = vals.get(r['k'], 0) - r['v']
+    top = max(list(vals.values()) + [0])
+    step = _nice(top / 3) if top > 0 else (100 if money else 1)
+    ymax = step * 3
+    W, H, L, B = 1000, 230, 46, 200          # viewbox width/height, left axis, bottom of plot
+    slot = (W - L - 4) / len(keys)
+    bw = max(min(slot * .6, 44), 2)
+    every = max(1, round(len(keys) / 10))   # at most ~10 date labels
+    bars = []
+    for i, k in enumerate(keys):
+        v = vals[k]
+        h = max(v, 0) / ymax * (B - 10)
+        x = L + i * slot + (slot - bw) / 2
+        day = date.fromisoformat(k + ('-01' if monthly else ''))
+        label = day.strftime('%b %Y') if monthly else day.strftime('%a %d %b')
+        tick = day.strftime('%b') if monthly else day.strftime('%d/%m')
+        bars.append({'x': x, 'y': B - h, 'w': bw, 'h': h, 'v': v, 'label': label,
+                     'tick': tick if i % every == 0 else '', 'cx': x + bw / 2})
+    grid = [{'y': B - i * (B - 10) / 3, 'label': short(step * i, money)} for i in range(4)]
+    return {'bars': bars, 'grid': grid, 'W': W, 'H': H, 'L': L, 'B': B, 'monthly': monthly,
+            'total': sum(vals.values()), 'empty': top <= 0}
+
+
+def _nice(x):
+    """Round an axis step up to 1, 2, 2.5 or 5 x 10^n."""
+    mag = 10 ** (len(str(int(x))) - 1) if x >= 1 else 1
+    for m in (1, 2, 2.5, 5, 10):
+        if x <= m * mag:
+            return m * mag
+    return 10 * mag
+
+
+def donut(rows):
+    """Shares for a ring chart: the 3 biggest plus 'Other' (fixed colour order, never more than 4)."""
+    items = sorted(((r['k'], r['v'] or 0) for r in rows if (r['v'] or 0) > 0), key=lambda kv: -kv[1])
+    if len(items) > 4:
+        items = items[:3] + [('Other', sum(v for _k, v in items[3:]))]
+    total = sum(v for _k, v in items)
+    out, at = [], 0
+    for i, (k, v) in enumerate(items):
+        pct = 100 * v / total
+        css = 'other' if k == 'Other' and i == 3 else f's{i + 1}'
+        gap = 1 if len(items) > 1 else 0    # small white gap between slices
+        out.append({'k': k, 'v': v, 'pct': pct, 'dash': max(pct - gap, .1), 'off': 25 - at, 'css': css})
+        at += pct
+    return {'parts': out, 'total': total}
 
 
 # ---------------------------------------------------------------- report definitions
