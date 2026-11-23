@@ -423,6 +423,9 @@ class ShopTest(unittest.TestCase):
         pos = [side.index(label) for label in order]
         self.assertEqual(pos, sorted(pos))
         self.assertIn('>⚙ Admin</a>', html)  # admin pages always reachable from the top bar
+        for key in ('selling', 'buying', 'stock', 'money', 'admin'):  # coloured, foldable groups
+            self.assertIn(f'<details class="group g-{key}"', side)
+        self.assertIn('toggleMini()', side)  # the whole menu can shrink to icons
         self.assertIn('id="help-dashboard"', html)  # help pop-up with the manual
         self.assertIn("'help-' + (topic || 'dashboard')", html)  # opens at this page's topic
         self.assertIn("|| 'pos')", self.c.get('/sales/pos').data.decode())
