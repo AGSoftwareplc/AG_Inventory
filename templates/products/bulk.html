@@ -1,0 +1,72 @@
+{% extends 'base.html' %}{% block title %}New products (several){% endblock %}
+{% macro row(r={}, err=none) %}<tbody class="prow{{ ' err' if err }}"><tr>
+  <td class="no muted"></td>
+  <td><input name="code" value="{{ r.code }}" style="width:85px"></td>
+  <td><input name="name" value="{{ r.name }}" style="min-width:150px"></td>
+  <td><select name="category_id"><option value="">(none)</option>
+    {% for c in cats %}<option value="{{ c.id }}" {{ 'selected' if r.category_id|string == c.id|string }}>{{ c.name }}</option>{% endfor %}</select></td>
+  <td><input name="unit" list="units" value="{{ r.unit or 'pcs' }}" style="width:82px"></td>
+  <td><input name="barcode" value="{{ r.barcode }}" style="width:105px"></td>
+  <td><input name="price" inputmode="decimal" value="{{ r.price }}" class="num"></td>
+  <td><input name="cost" inputmode="decimal" value="{{ r.cost }}" class="num"></td>
+  <td><input name="opening" inputmode="decimal" value="{{ r.opening }}" class="num"></td>
+  <td><input name="min_stock" inputmode="decimal" value="{{ r.min_stock or '0' }}" class="num"></td>
+  <td><button type="button" class="x" title="Remove row" onclick="removeRow(this)">×</button></td>
+</tr>{% if err %}<tr class="rowerr"><td></td><td colspan="10">⚠ {{ err }}</td></tr>{% endif %}</tbody>{% endmacro %}
+{% block content %}
+<div class="head"><h1>New products (several at once)</h1>
+  <div><a class="btn light" href="{{ url_for('products.edit') }}">One product with description</a></div></div>
+<p class="muted">Type one product per row. A new empty row appears when you start typing in the last one, or click <b>+ Add row</b>. Empty rows are ignored. Nothing is saved until every row is correct.</p>
+<form method="post" id="bf">{{ csrf() }}{{ once() }}
+<div class="card tablewrap bulk">
+<table id="rows"><thead><tr><th>#</th><th>Code *</th><th>Name *</th><th>Category</th><th>Unit</th><th>Barcode</th>
+  <th class="n">Selling price *</th><th class="n">Purchase cost</th><th class="n">Opening stock</th><th class="n">Min stock</th><th></th></tr></thead>
+{% for r in rows %}{{ row(r, errors.get(loop.index0)) }}{% endfor %}
+</table>
+<datalist id="units">{% for u in units %}<option value="{{ u }}">{% endfor %}</datalist>
+<div class="actions"><button type="button" class="light small" onclick="addRow()">+ Add row</button>
+  <button type="button" class="light small" onclick="for (var i = 0; i < 5; i++) addRow()">+ 5 rows</button></div>
+</div>
+<div class="actions"><button>Save all products</button> <a class="btn light" href="{{ url_for('products.index') }}">Cancel</a>
+  <span class="muted" id="count"></span></div>
+</form>
+<template id="tpl">{{ row() }}</template>
+{% endblock %}
+{% block scripts %}<script>
+var table = document.getElementById('rows');
+function renumber() {
+  var filled = 0;
+  table.querySelectorAll('tbody.prow').forEach(function (b, i) {
+    b.querySelector('.no').textContent = i + 1;
+    if (b.querySelector('[name=code]').value || b.querySelector('[name=name]').value) filled++;
+  });
+  document.getElementById('count').textContent = filled ? filled + ' product(s) filled in' : '';
+}
+function addRow() {
+  var b = document.getElementById('tpl').content.firstElementChild.cloneNode(true);
+  table.appendChild(b); renumber(); return b;
+}
+function removeRow(btn) {
+  btn.closest('tbody').remove();
+  if (!table.querySelector('tbody.prow')) addRow();
+  renumber();
+}
+table.addEventListener('input', function (e) {
+  var b = e.target.closest('tbody.prow');
+  if (b && b === table.querySelector('tbody.prow:last-of-type') && e.target.value) addRow();
+  renumber();
+});
+// copy the unit and category of the row above into a new row, so repeated items are quick to type
+table.addEventListener('focusin', function (e) {
+  var b = e.target.closest('tbody.prow'), prev = b && b.previousElementSibling;
+  if (!prev || !prev.classList.contains('prow') || b.dataset.touched) return;
+  b.dataset.touched = 1;
+  if (!b.querySelector('[name=code]').value && !b.querySelector('[name=name]').value) {
+    b.querySelector('[name=category_id]').value = prev.querySelector('[name=category_id]').value;
+    b.querySelector('[name=unit]').value = prev.querySelector('[name=unit]').value;
+  }
+});
+var need = Math.max(1, 5 - table.querySelectorAll('tbody.prow').length);
+for (var i = 0; i < need; i++) addRow();
+renumber();
+</script>{% endblock %}
