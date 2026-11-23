@@ -13,6 +13,7 @@ import zipfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app import create_app  # noqa: E402
+import core  # noqa: E402
 from core import connect  # noqa: E402
 
 
@@ -392,12 +393,14 @@ class ShopTest(unittest.TestCase):
     def test_new_starter_users_added_to_existing_shop(self):
         """A shop seeded with the first 3 starter users (v1.1) gets the extra cashiers once."""
         con = self.db()
+        con.execute("DELETE FROM user_branches WHERE user_id IN (SELECT id FROM users WHERE username IN ('cashier2','cashier3'))")
         con.execute("DELETE FROM users WHERE username IN ('cashier2', 'cashier3')")
         con.execute("UPDATE settings SET value='1' WHERE key='seeded_role_users'")
         con.close()
         create_app(self.dbfile, testing=True)
         self.assertEqual(self.one("SELECT COUNT(*) FROM users WHERE role='Sales Attendant'")[0], 3)
         con = self.db()
+        con.execute("DELETE FROM user_branches WHERE user_id IN (SELECT id FROM users WHERE username='cashier3')")
         con.execute("DELETE FROM users WHERE username='cashier3'")
         con.close()
         create_app(self.dbfile, testing=True)
@@ -413,6 +416,46 @@ class ShopTest(unittest.TestCase):
         cols = [r['name'] for r in con.execute('PRAGMA table_info(expenses)')]
         con.close()
         self.assertIn('reversal_of', cols)
+
+    # ---------------------------------------------------------------- businesses & branches
+    def platform(self):
+        return connect(os.path.join(self.tmp, 'platform.db'))
+
+    def test_first_business_and_main_branch(self):
+        # the existing shop becomes business 1 with a Main branch; admin is a Super Admin
+        p = self.platform()
+        biz = p.execute('SELECT * FROM businesses').fetchall()
+        self.assertEqual(len(biz), 1)
+        self.assertEqual(biz[0]['code'], 'MAIN')
+        self.assertTrue(p.execute("SELECT is_super FROM logins WHERE username='admin'").fetchone()['is_super'])
+        p.close()
+        branch = self.one('SELECT code, name FROM branches')
+        self.assertEqual((branch['code'], branch['name']), ('MAIN', 'Main branch'))
+        # existing users are placed in the Main branch
+        self.assertTrue(self.one("SELECT 1 FROM user_branches ub JOIN users u ON u.id=ub.user_id "
+                                 "WHERE u.username='admin' AND ub.branch_id=1"))
+
+    def test_second_business_is_isolated(self):
+        with self.app.app_context():
+            from flask import g
+            g.pdb = connect(os.path.join(self.tmp, 'platform.db'))
+            core.current_app.config['PLATFORM_DB'] = os.path.join(self.tmp, 'platform.db')
+            bid = core.create_business('Second Shop', 'SEC', 'owner2', 'Owner Two', 'secret2')
+            g.pdb.commit()
+            g.pdb.close()
+        self.assertEqual(bid, 2)
+        # owner2 logs into business 2, not the first shop's data
+        self.login('owner2', 'secret2')
+        self.post('/products/new', {'code': 'SECP', 'name': 'Second-only', 'unit': 'pcs',
+                                    'price': '500', 'cost': '0', 'opening': '0', 'min_stock': '0'}, once=False)
+        self.assertIn(b'SECP', self.c.get('/products/').data)
+        # the first shop never sees it
+        self.login('admin', 'admin123')
+        self.assertNotIn(b'SECP', self.c.get('/products/').data)
+        # usernames are unique across businesses
+        r = self.post('/admin/users/new', {'username': 'owner2', 'full_name': 'Clash',
+                                            'role': 'Sales Attendant', 'password': 'secret9', 'active': '1'}, once=False)
+        self.assertIn(b'already taken', r.data)
 
     # ---------------------------------------------------------------- side menu and help
     def test_side_menu_order_and_help(self):

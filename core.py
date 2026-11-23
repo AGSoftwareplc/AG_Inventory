@@ -58,7 +58,8 @@ class RuleError(Exception):
 
 # ---------------------------------------------------------------- database
 def db_path():
-    return current_app.config['DATABASE']
+    """The database file of the business being worked on (one SQLite file per business)."""
+    return g.get('business_db') or current_app.config['DATABASE']
 
 
 def connect(path):
@@ -76,9 +77,10 @@ def get_db():
 
 
 def close_db(_exc=None):
-    con = g.pop('db', None)
-    if con is not None:
-        con.close()
+    for key in ('db', 'pdb'):
+        con = g.pop(key, None)
+        if con is not None:
+            con.close()
 
 
 @contextmanager
@@ -94,8 +96,8 @@ def tx(db=None):
         raise
 
 
-def init_db(path):
-    """Create tables and default data if missing. Safe to run on every start."""
+def init_db(path, seed_starters=True):
+    """Create a business database's tables and default data if missing. Safe to run on every start."""
     os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
     con = connect(path)
     with open(os.path.join(BASE_DIR, 'schema.sql'), encoding='utf-8') as f:
@@ -109,7 +111,13 @@ def init_db(path):
     if not con.execute('SELECT 1 FROM expense_categories LIMIT 1').fetchone():
         con.executemany('INSERT INTO expense_categories(name) VALUES (?)',
                         [(n,) for n in EXPENSE_CATEGORIES])
-    seed_users(con)
+    if not con.execute('SELECT 1 FROM branches LIMIT 1').fetchone():
+        con.execute("INSERT INTO branches(id, code, name) VALUES (1, 'MAIN', 'Main branch')")
+    if seed_starters:
+        seed_users(con)
+    # every user works in at least one branch (users from before branches existed: the Main branch)
+    con.execute('INSERT OR IGNORE INTO user_branches(user_id, branch_id) SELECT id, 1 FROM users '
+                'WHERE id NOT IN (SELECT user_id FROM user_branches)')
     con.close()
 
 
@@ -150,6 +158,14 @@ def uses_starter_password(user):
 # Columns added after version 1.0: (table, column, definition). Applied once to older databases.
 MIGRATIONS = [
     ('expenses', 'reversal_of', 'INTEGER REFERENCES expenses(id)'),
+    # version 2: every branch-level record belongs to a branch (existing data: the Main branch, id 1)
+    ('sales', 'branch_id', 'INTEGER NOT NULL DEFAULT 1'),
+    ('purchases', 'branch_id', 'INTEGER NOT NULL DEFAULT 1'),
+    ('stock_moves', 'branch_id', 'INTEGER NOT NULL DEFAULT 1'),
+    ('stocktakes', 'branch_id', 'INTEGER NOT NULL DEFAULT 1'),
+    ('expenses', 'branch_id', 'INTEGER NOT NULL DEFAULT 1'),
+    ('returns', 'branch_id', 'INTEGER NOT NULL DEFAULT 1'),
+    ('audit_log', 'branch_id', 'INTEGER'),
 ]
 
 
@@ -158,6 +174,121 @@ def migrate(con):
         cols = {r['name'] for r in con.execute(f'PRAGMA table_info({table})')}
         if col not in cols:
             con.execute(f'ALTER TABLE {table} ADD COLUMN {col} {definition}')
+
+
+# ---------------------------------------------------------------- businesses (platform)
+# Each business has its own SQLite file, so one business can never read another's data.
+# A small platform file lists the businesses and which business each username belongs to.
+PLATFORM_SCHEMA = """
+CREATE TABLE IF NOT EXISTS businesses (
+  id INTEGER PRIMARY KEY,
+  code TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  name TEXT NOT NULL,
+  db_file TEXT NOT NULL,                 -- relative to the platform file's folder (or absolute)
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+CREATE TABLE IF NOT EXISTS logins (
+  username TEXT PRIMARY KEY COLLATE NOCASE,   -- usernames are unique across all businesses
+  business_id INTEGER NOT NULL REFERENCES businesses(id),
+  is_super INTEGER NOT NULL DEFAULT 0         -- Super Admin: manages the businesses
+);
+"""
+
+
+def platform_path():
+    return current_app.config['PLATFORM_DB']
+
+
+def business_file(platform, row):
+    return os.path.join(os.path.dirname(os.path.abspath(platform)), row['db_file'])
+
+
+def sync_logins(pcon, business_id, bcon):
+    """Make every user of a business findable at login (new usernames only)."""
+    for u in bcon.execute('SELECT username FROM users'):
+        pcon.execute('INSERT OR IGNORE INTO logins(username, business_id) VALUES (?, ?)',
+                     (u['username'], business_id))
+
+
+def init_platform(platform, first_db):
+    """Create the platform file. The first time, the existing shop becomes business 1 and its
+    administrators become Super Admins. Then bring every business database up to date."""
+    pcon = connect(platform)
+    pcon.executescript(PLATFORM_SCHEMA)
+    if not pcon.execute('SELECT 1 FROM businesses LIMIT 1').fetchone():
+        try:
+            rel = os.path.relpath(os.path.abspath(first_db), os.path.dirname(os.path.abspath(platform)))
+        except ValueError:  # another drive on Windows
+            rel = os.path.abspath(first_db)
+        init_db(first_db)
+        bcon = connect(first_db)
+        name = (bcon.execute("SELECT value FROM settings WHERE key='shop_name'").fetchone() or ['My Shop'])[0]
+        pcon.execute("INSERT INTO businesses(id, code, name, db_file) VALUES (1, 'MAIN', ?, ?)", (name, rel))
+        sync_logins(pcon, 1, bcon)
+        for u in bcon.execute('SELECT username FROM users WHERE role=?', (ADMIN,)):
+            pcon.execute('UPDATE logins SET is_super=1 WHERE username=?', (u['username'],))
+        bcon.close()
+    for b in pcon.execute('SELECT * FROM businesses').fetchall():
+        path = business_file(platform, b)
+        init_db(path, seed_starters=(b['id'] == 1))
+        bcon = connect(path)
+        sync_logins(pcon, b['id'], bcon)
+        bcon.close()
+    pcon.close()
+
+
+def get_platform():
+    if 'pdb' not in g:
+        g.pdb = connect(platform_path())
+    return g.pdb
+
+
+def create_business(name, code, admin_username, admin_name, admin_password):
+    """New business with its own database file, a Main branch and its first administrator."""
+    from werkzeug.security import generate_password_hash
+    name, code, admin_username = name.strip(), code.strip().upper(), admin_username.strip()
+    if not name or not code or not admin_username or not admin_name.strip():
+        raise RuleError('Business name, code, admin username and admin name are required.')
+    if not code.isalnum() or len(code) > 10:
+        raise RuleError('The business code must be letters and digits only, up to 10.')
+    if len(admin_password) < 6:
+        raise RuleError('The admin password must be at least 6 characters.')
+    platform = platform_path()
+    p = get_platform()
+    if p.execute('SELECT 1 FROM businesses WHERE code=?', (code,)).fetchone():
+        raise RuleError('Another business already uses this code.')
+    if p.execute('SELECT 1 FROM logins WHERE username=?', (admin_username,)).fetchone():
+        raise RuleError('This username is already taken.')
+    bid = (p.execute('SELECT MAX(id) FROM businesses').fetchone()[0] or 0) + 1
+    rel = f'biz-{bid}.db'
+    path = os.path.join(os.path.dirname(os.path.abspath(platform)), rel)
+    init_db(path, seed_starters=False)
+    bcon = connect(path)
+    bcon.execute("INSERT OR REPLACE INTO settings(key, value) VALUES ('seeded_role_users', ?)",
+                 (str(len(STARTER_USERS)),))
+    bcon.execute("UPDATE settings SET value=? WHERE key='shop_name'", (name,))
+    uid = bcon.execute('INSERT INTO users(username, full_name, password_hash, role) VALUES (?,?,?,?)',
+                       (admin_username, admin_name.strip(), generate_password_hash(admin_password), ADMIN)).lastrowid
+    bcon.execute('INSERT INTO user_branches(user_id, branch_id) VALUES (?, 1)', (uid,))
+    bcon.close()
+    p.execute('INSERT INTO businesses(id, code, name, db_file) VALUES (?,?,?,?)', (bid, code, name, rel))
+    p.execute('INSERT INTO logins(username, business_id) VALUES (?, ?)', (admin_username, bid))
+    return bid
+
+
+def username_taken(username, business_id):
+    """True if another business already uses this username."""
+    r = get_platform().execute('SELECT business_id FROM logins WHERE username=?', (username,)).fetchone()
+    return bool(r) and r['business_id'] != business_id
+
+
+def register_login(old, new, business_id):
+    """Keep the platform's username list in step with a business's users."""
+    p = get_platform()
+    if old and old.lower() != new.lower():
+        p.execute('UPDATE logins SET username=? WHERE username=? AND business_id=?', (new, old, business_id))
+    p.execute('INSERT OR IGNORE INTO logins(username, business_id) VALUES (?, ?)', (new, business_id))
 
 
 def setting(key):
@@ -329,17 +460,34 @@ def admin_required(view):
     return wrapped
 
 
+def use_business(bid):
+    """Point this request at one business's database. Returns the business row, or None."""
+    b = get_platform().execute('SELECT * FROM businesses WHERE id=? AND active=1', (bid,)).fetchone()
+    if b:
+        if g.get('business_db') != business_file(platform_path(), b):
+            db = g.pop('db', None)
+            if db is not None:
+                db.close()
+            g.pop('settings', None)
+        g.business, g.business_db = b, business_file(platform_path(), b)
+    return b
+
+
 def load_user():
-    g.user, g.perms = None, set()
-    uid = session.get('uid')
-    if uid:
+    g.user, g.perms, g.business, g.is_super = None, set(), None, False
+    uid, bid = session.get('uid'), session.get('bid', 1)
+    if uid and use_business(bid):
         u = get_db().execute('SELECT * FROM users WHERE id=? AND active=1', (uid,)).fetchone()
         if u:
             g.user = u
             g.perms = {r['perm'] for r in get_db().execute(
                 'SELECT perm FROM role_permissions WHERE role=?', (u['role'],))}
-        else:
-            session.clear()
+            r = get_platform().execute('SELECT is_super FROM logins WHERE username=? AND business_id=?',
+                                       (u['username'], bid)).fetchone()
+            g.is_super = bool(r and r['is_super'])
+            return
+    if uid:
+        session.clear()
 
 
 # ---------------------------------------------------------------- forms
