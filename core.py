@@ -115,22 +115,27 @@ def init_db(path):
 
 # One starter login per role: (username, full name, role, starter password).
 # Created once per database; afterwards the administrator manages them in Users.
+# Starter logins. Only add to the END of this list: each database remembers how many it has
+# seeded (settings 'seeded_role_users'), so new entries are added to existing shops once.
 STARTER_USERS = [
     ('admin', 'Administrator', ADMIN, 'admin123'),
     ('cashier', 'Cashier', 'Sales Attendant', 'cashier123'),
     ('storekeeper', 'Store keeper', 'Inventory Manager', 'store123'),
+    ('cashier2', 'Cashier 2', 'Sales Attendant', 'sales222'),
+    ('cashier3', 'Cashier 3', 'Sales Attendant', 'sales333'),
 ]
 
 
 def seed_users(con):
     from werkzeug.security import generate_password_hash
-    done = con.execute("SELECT 1 FROM settings WHERE key='seeded_role_users'").fetchone()
-    if done:
-        return
-    for username, name, role, pw in STARTER_USERS:
+    row = con.execute("SELECT value FROM settings WHERE key='seeded_role_users'").fetchone()
+    done = 0 if row is None else (3 if row['value'] == '1' else int(row['value']))  # '1' = first 3 (v1.1)
+    for username, name, role, pw in STARTER_USERS[done:]:
         con.execute('INSERT OR IGNORE INTO users(username, full_name, password_hash, role) VALUES (?,?,?,?)',
                     (username, name, generate_password_hash(pw), role))
-    con.execute("INSERT INTO settings(key, value) VALUES ('seeded_role_users', '1')")
+    if done != len(STARTER_USERS):
+        con.execute("INSERT OR REPLACE INTO settings(key, value) VALUES ('seeded_role_users', ?)",
+                    (str(len(STARTER_USERS)),))
 
 
 def uses_starter_password(user):
