@@ -1,0 +1,27 @@
+{% extends 'base.html' %}{% block title %}{{ 'Edit' if p else 'New' }} product{% endblock %}
+{% macro val(k, default='') %}{{ f.get(k) if f.get(k) is not none else (p[k] if p and p[k] is not none else default) }}{% endmacro %}
+{% block content %}
+<h1>{{ 'Edit product: ' ~ p.name if p else 'New product' }}</h1>
+<form method="post" class="card">{{ csrf() }}
+<div class="grid">
+  <div><label>Product code / SKU *</label><input name="code" value="{{ val('code') }}" required></div>
+  <div class="wide" style="grid-column:span 2"><label>Name *</label><input name="name" value="{{ val('name') }}" required></div>
+  <div><label>Category</label><select name="category_id"><option value="">(none)</option>
+    {% for c in cats %}<option value="{{ c.id }}" {{ 'selected' if val('category_id')|string == c.id|string }}>{{ c.name }}</option>{% endfor %}</select></div>
+  <div><label>Unit of measurement</label><input name="unit" list="units" value="{{ val('unit', 'pcs') }}"><datalist id="units">{% for u in units %}<option value="{{ u }}">{% endfor %}</datalist></div>
+  <div><label>Barcode (optional)</label><input name="barcode" value="{{ val('barcode') }}"></div>
+  <div><label>Selling price ({{ currency }}) *</label><input name="price" inputmode="decimal" value="{{ f.price if f.price is defined else (p.price|money_input if p else '') }}" required></div>
+  {% if not p %}
+  <div><label>Purchase cost ({{ currency }})</label><input name="cost" inputmode="decimal" value="{{ f.cost or '' }}"></div>
+  <div><label>Opening stock (optional)</label><input name="opening" inputmode="decimal" value="{{ f.opening or '' }}"></div>
+  {% else %}
+  <div><label>Average cost (automatic)</label><input value="{{ p.avg_cost|money }}" disabled></div>
+  {% endif %}
+  <div><label>Minimum stock level</label><input name="min_stock" inputmode="decimal" value="{{ f.min_stock if f.min_stock is defined else (p.min_stock|qty if p else '0') }}"></div>
+  <div class="wide"><label>Description</label><textarea name="description" rows="2">{{ val('description') }}</textarea></div>
+  {% if p %}<div><label><input type="checkbox" name="active" value="1" {{ 'checked' if p.active }}> Active (can be sold and purchased)</label></div>{% endif %}
+</div>
+<div class="actions"><button>Save product</button> <a class="btn light" href="{{ url_for('products.index') }}">Cancel</a></div>
+</form>
+{% if p %}<form method="post" action="{{ url_for('products.delete', pid=p.id) }}" onsubmit="return confirm('Delete this product permanently?')">{{ csrf() }}<button class="light small">Delete product (only if it was never used)</button></form>{% endif %}
+{% endblock %}

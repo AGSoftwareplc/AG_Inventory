@@ -1,0 +1,18 @@
+{% extends 'base.html' %}{% block title %}Stocktake ST-{{ st.id }}{% endblock %}
+{% block content %}
+{% set open = st.status == 'Open' %}
+<div class="head"><h1>Stocktake ST-{{ st.id }} <span class="badge {{ 'warn' if open else 'ok' }}">{{ st.status }}</span></h1>
+<div class="noprint"><button class="light" onclick="window.print()">Print count sheet</button> <a class="btn light" href="{{ url_for('inventory.stocktakes') }}">All stocktakes</a></div></div>
+<p class="muted">{{ st.date }} · {{ st.notes }}{% if open %} · Enter the physical counts. Leave blank to skip a product. "Save" keeps your counts; "Post" applies the differences to stock.{% endif %}</p>
+<form method="post">{{ csrf() }}
+<div class="card tablewrap" style="padding:0"><table>
+<tr><th>Code</th><th>Product</th><th class="n">Recorded{{ ' now' if open }}</th><th class="n">Counted</th><th class="n">Difference</th></tr>
+{% for r in rows %}{% set rec = r.stock if open else r.system_qty %}
+<tr><td>{{ r.code }}</td><td>{{ r.name }}</td><td class="n">{{ rec|qty }} {{ r.unit }}</td>
+<td class="n">{% if open %}<input name="c_{{ r.product_id }}" inputmode="decimal" value="{{ r.counted_qty|qty if r.counted_qty is not none else '' }}" style="width:100px;text-align:right">{% else %}{{ r.counted_qty|qty if r.counted_qty is not none else '-' }}{% endif %}</td>
+<td class="n">{% if r.counted_qty is not none %}{% set d = r.counted_qty - rec %}<span class="{{ 'badge err' if d < 0 else ('badge ok' if d > 0 else '') }}">{{ '+' if d > 0 }}{{ d|qty }}</span>{% endif %}</td></tr>
+{% endfor %}</table></div>
+{% if open %}<div class="actions"><button name="save" value="1" class="light">Save counts</button>
+<button name="post" value="1" onclick="return confirm('Apply all differences to stock? This cannot be undone.')">Post stocktake</button></div>{% endif %}
+</form>
+{% endblock %}

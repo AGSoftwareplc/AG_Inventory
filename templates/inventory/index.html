@@ -1,0 +1,22 @@
+{% extends 'base.html' %}{% block title %}Inventory{% endblock %}
+{% block content %}
+<div class="head"><h1>Inventory</h1>
+<div>{% if can('adjust') %}<a class="btn light" href="{{ url_for('inventory.adjust') }}">Adjust stock</a> <a class="btn light" href="{{ url_for('inventory.stocktakes') }}">Stocktake</a>{% endif %}
+<a class="btn light" href="{{ url_for('inventory.movements') }}">Movements</a></div></div>
+<form class="filters">
+  <div class="grow"><label>Search</label><input name="q" value="{{ q }}"></div>
+  <div><label>Category</label><select name="cat"><option value="">All</option>{% for c in cats %}<option value="{{ c.id }}" {{ 'selected' if cat|string == c.id|string }}>{{ c.name }}</option>{% endfor %}</select></div>
+  <div><label><input type="checkbox" name="low" value="1" {{ 'checked' if low }}> Low stock only</label></div>
+  <div style="flex:0"><button>Show</button></div>
+</form>
+{% if can('reports') %}<p><b>Stock value at average cost:</b> {{ value|money }} {{ currency }}</p>{% endif %}
+<div class="card tablewrap" style="padding:0"><table>
+<tr><th>Code</th><th>Product</th><th>Category</th><th class="n">Stock</th><th class="n">Minimum</th>{% if can('reports') %}<th class="n">Avg cost</th><th class="n">Value</th>{% endif %}<th></th></tr>
+{% for p in rows %}{% set lowp = p.min_stock > 0 and p.stock <= p.min_stock %}
+<tr class="{{ 'low' if lowp }}"><td>{{ p.code }}</td><td><a href="{{ url_for('products.view', pid=p.id) }}">{{ p.name }}</a> {% if lowp %}<span class="badge warn">low</span>{% endif %}</td><td>{{ p.cat or '' }}</td>
+<td class="n">{{ p.stock|qty }} {{ p.unit }}</td><td class="n">{{ p.min_stock|qty }}</td>
+{% if can('reports') %}<td class="n">{{ p.avg_cost|money }}</td><td class="n">{{ (p.stock*p.avg_cost)|money }}</td>{% endif %}
+<td class="n">{% if can('adjust') %}<a href="{{ url_for('inventory.adjust', pid=p.id) }}">Adjust</a>{% endif %}</td></tr>
+{% else %}<tr><td colspan="8" class="muted">Nothing to show.</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

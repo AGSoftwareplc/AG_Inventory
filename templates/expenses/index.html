@@ -1,0 +1,23 @@
+{% extends 'base.html' %}{% block title %}Expenses{% endblock %}
+{% block content %}
+<h1>Expenses</h1>
+<div class="row">
+<form method="post" class="card" style="flex:2 1 420px">{{ csrf() }}{{ once() }}<h2 style="margin-top:0">Record expense</h2>
+<div class="grid">
+  <div><label>Category *</label><select name="category_id" required><option value="">Choose…</option>{% for c in cats %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select></div>
+  <div><label>Amount ({{ currency }}) *</label><input name="amount" inputmode="decimal" required></div>
+  <div><label>Date</label><input type="date" name="date" value="{{ today }}"></div>
+  <div><label>Payment method</label><select name="method">{% for m in methods %}<option>{{ m }}</option>{% endfor %}</select></div>
+  <div class="wide"><label>Description</label><input name="description"></div>
+</div><div class="actions"><button>Save expense</button></div></form>
+<form method="post" action="{{ url_for('expenses.add_category') }}" class="card" style="flex:1 1 220px">{{ csrf() }}<h2 style="margin-top:0">New category</h2>
+<input name="name" required><div class="actions"><button class="light">Add category</button></div></form>
+</div>
+<form class="filters">{% include '_range.html' %}
+<div><label>Category</label><select name="cat"><option value="">All</option>{% for c in cats %}<option value="{{ c.id }}" {{ 'selected' if cat == c.id }}>{{ c.name }}</option>{% endfor %}</select></div>
+<div style="flex:0"><button>Show</button></div></form>
+<div class="card tablewrap" style="padding:0"><table><tr><th>Ref</th><th>Date</th><th>Category</th><th>Description</th><th>Method</th><th>By</th><th class="n">Amount</th></tr>
+{% for e in rows %}<tr><td>{{ e.ref_no }}</td><td>{{ e.date }}</td><td>{{ e.cat }}</td><td>{{ e.description }}</td><td>{{ e.method }}</td><td>{{ e.username }}</td><td class="n">{{ e.amount|money }}</td></tr>
+{% else %}<tr><td colspan="7" class="muted">No expenses in this period.</td></tr>{% endfor %}
+<tr class="total"><td colspan="6">Total</td><td class="n">{{ total|money }}</td></tr></table></div>
+{% endblock %}

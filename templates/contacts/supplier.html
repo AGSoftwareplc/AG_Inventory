@@ -1,0 +1,13 @@
+{% extends 'base.html' %}{% block title %}{{ r.name }}{% endblock %}
+{% block content %}
+<div class="head"><h1>{{ r.name }}{% if not r.active %} <span class="badge">inactive</span>{% endif %}</h1>
+<div>{% if can('purchases') %}<a class="btn light" href="{{ url_for('purchases.index', supplier=r.id, start='2000-01-01') }}">Purchases</a>{% endif %} {% if can('suppliers') %}<a class="btn" href="{{ url_for('contacts.supplier_edit', rid=r.id) }}">Edit</a>{% endif %}</div></div>
+<div class="card grid"><div><label>Contact person</label>{{ r.contact_person or '-' }}</div><div><label>Phone</label>{{ r.phone or '-' }}</div>
+<div><label>Email</label>{{ r.email or '-' }}</div><div><label>Address</label>{{ r.address or '-' }}</div>
+<div><label>We owe</label><b>{{ owed|money }}</b> {{ currency }}</div>{% if r.description %}<div class="wide"><label>Description</label>{{ r.description }}</div>{% endif %}</div>
+<h2>Purchase history</h2>
+<div class="card tablewrap" style="padding:0"><table><tr><th>Ref</th><th>Date</th><th>Status</th><th class="n">Total</th><th class="n">Paid</th><th class="n">Balance</th></tr>
+{% for p in hist %}<tr><td><a href="{{ url_for('purchases.view', pur_id=p.id) }}">{{ p.ref_no }}</a></td><td>{{ p.date }}</td><td>{{ p.status }}</td><td class="n">{{ p.total|money }}</td><td class="n">{{ p.paid|money }}</td>
+<td class="n">{{ (p.total-p.returned_value-p.paid)|money if p.status not in ('Draft','Cancelled') }}</td></tr>
+{% else %}<tr><td colspan="6" class="muted">No purchases yet.</td></tr>{% endfor %}</table></div>
+{% endblock %}

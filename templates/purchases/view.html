@@ -1,0 +1,61 @@
+{% extends 'base.html' %}{% block title %}Purchase {{ pur.ref_no }}{% endblock %}
+{% block content %}
+{% set st = pur.status %}
+<div class="head"><h1>Purchase {{ pur.ref_no }} <span class="badge {{ 'ok' if st == 'Received' else ('err' if st == 'Cancelled' else 'warn') }}">{{ st }}</span></h1>
+<div class="noprint"><button class="light" onclick="window.print()">Print</button> <a class="btn light" href="{{ url_for('purchases.index') }}">All purchases</a></div></div>
+<div class="card"><div class="grid">
+  <div><label>Supplier</label><a href="{{ url_for('contacts.supplier', rid=pur.supplier_id) }}">{{ pur.supplier }}</a> {{ pur.phone }}</div>
+  <div><label>Date</label>{{ pur.date }}</div><div><label>Created by</label>{{ pur.username }}</div>
+  {% if st not in ('Draft','Cancelled') %}<div><label>Payment</label>{{ pay_status }} · balance <b>{{ balance|money }}</b></div>{% endif %}
+  {% if pur.notes %}<div class="wide"><label>Notes</label>{{ pur.notes }}</div>{% endif %}
+  {% if pur.cancel_reason %}<div class="wide"><label>Cancel reason</label>{{ pur.cancel_reason }}</div>{% endif %}
+</div></div>
+
+<form method="post" action="{{ url_for('purchases.receive', pur_id=pur.id) }}">{{ csrf() }}{{ once() }}
+<div class="card tablewrap" style="padding:0"><table>
+<tr><th>Product</th><th class="n">Ordered</th><th class="n">Unit cost</th><th class="n">Net unit cost</th><th class="n">Line total</th><th class="n">Received</th><th class="n">Returned</th>
+{% if st in ('Confirmed','Partially Received') and can('receive') %}<th class="n">Receive now</th>{% endif %}</tr>
+{% for i in items %}{% set left = i.qty - i.received_qty %}
+<tr><td>{{ i.name }} <span class="muted">{{ i.code }}</span></td><td class="n">{{ i.qty|qty }} {{ i.unit }}</td><td class="n">{{ i.unit_cost|money }}</td>
+<td class="n">{{ i.net_cost|money }}</td><td class="n">{{ (i.qty*i.unit_cost)|money }}</td><td class="n">{{ i.received_qty|qty }}</td><td class="n">{{ i.returned_qty|qty }}</td>
+{% if st in ('Confirmed','Partially Received') and can('receive') %}<td class="n">{% if left > 0.0005 %}<input name="r_{{ i.id }}" inputmode="decimal" value="{{ left|qty }}" style="width:100px;text-align:right">{% else %}✓{% endif %}</td>{% endif %}</tr>
+{% endfor %}
+<tr><td colspan="4" class="n">Subtotal</td><td class="n">{{ gross|money }}</td><td colspan="3"></td></tr>
+{% if pur.discount %}<tr><td colspan="4" class="n">Discount</td><td class="n">−{{ pur.discount|money }}</td><td colspan="3"></td></tr>{% endif %}
+<tr class="total"><td colspan="4" class="n">Total</td><td class="n">{{ pur.total|money }}</td><td colspan="3"></td></tr>
+{% if pur.returned_value %}<tr><td colspan="4" class="n">Returned to supplier</td><td class="n">−{{ pur.returned_value|money }}</td><td colspan="3"></td></tr>{% endif %}
+<tr><td colspan="4" class="n">Paid</td><td class="n">{{ pur.paid|money }}</td><td colspan="3"></td></tr>
+</table></div>
+{% if st in ('Confirmed','Partially Received') and can('receive') %}<div class="actions noprint"><button>Receive into stock</button> <span class="muted">Change the quantities for a partial delivery.</span></div>{% endif %}
+</form>
+
+<div class="row noprint">
+{% if st == 'Draft' and can('purchases') %}
+<div class="card"><h2 style="margin-top:0">Draft</h2><div class="actions">
+  <a class="btn light" href="{{ url_for('purchases.edit', pur_id=pur.id) }}">Edit</a>
+  <form method="post" class="inline" action="{{ url_for('purchases.confirm', pur_id=pur.id) }}">{{ csrf() }}{{ once() }}<button>Confirm order</button></form></div></div>
+{% endif %}
+{% if st in ('Draft','Confirmed') and can('purchases') and not pur.paid %}
+<form method="post" class="card" action="{{ url_for('purchases.cancel', pur_id=pur.id) }}">{{ csrf() }}{{ once() }}<h2 style="margin-top:0">Cancel purchase</h2>
+<label>Reason *</label><input name="reason" required><div class="actions"><button class="danger">Cancel purchase</button></div></form>
+{% endif %}
+{% if st not in ('Draft','Cancelled') and balance > 0 and (can('payments') or can('purchases')) %}
+<form method="post" class="card" action="{{ url_for('purchases.pay', pur_id=pur.id) }}">{{ csrf() }}{{ once() }}<h2 style="margin-top:0">Record payment to supplier</h2>
+<div class="grid"><div><label>Amount</label><input name="amount" inputmode="decimal" value="{{ balance|money_input }}" required></div>
+<div><label>Method</label><select name="method">{% for m in methods %}<option>{{ m }}</option>{% endfor %}</select></div>
+<div><label>Date</label><input type="date" name="date" value="{{ today }}"></div></div>
+<div class="actions"><button>Save payment</button></div></form>
+{% endif %}
+{% if st in ('Partially Received','Received') and can('receive') %}
+<form method="post" class="card" action="{{ url_for('purchases.ret', pur_id=pur.id) }}">{{ csrf() }}{{ once() }}<h2 style="margin-top:0">Return to supplier</h2>
+<div class="grid"><div class="wide"><label>Line</label><select name="item_id">{% for i in items if i.received_qty - i.returned_qty > 0.0005 %}<option value="{{ i.id }}">{{ i.name }} (up to {{ (i.received_qty - i.returned_qty)|qty }})</option>{% endfor %}</select></div>
+<div><label>Quantity</label><input name="qty" inputmode="decimal" required></div><div><label>Reason *</label><input name="reason" required></div></div>
+<div class="actions"><button class="light">Record return</button></div></form>
+{% endif %}
+</div>
+
+{% if pays %}<h2>Payments</h2><div class="card tablewrap" style="padding:0"><table><tr><th>Date</th><th>Method</th><th class="n">Amount</th><th>By</th></tr>
+{% for p in pays %}<tr><td>{{ p.date }}</td><td>{{ p.method }}</td><td class="n">{{ p.amount|money }}</td><td>{{ p.username }}</td></tr>{% endfor %}</table></div>{% endif %}
+{% if rets %}<h2>Supplier returns</h2><div class="card tablewrap" style="padding:0"><table><tr><th>Date</th><th>Product</th><th class="n">Qty</th><th class="n">Credit</th><th>Reason</th><th>By</th></tr>
+{% for r in rets %}<tr><td>{{ r.date }}</td><td>{{ r.name }}</td><td class="n">{{ r.qty|qty }}</td><td class="n">{{ r.amount|money }}</td><td>{{ r.reason }}</td><td>{{ r.username }}</td></tr>{% endfor %}</table></div>{% endif %}
+{% endblock %}

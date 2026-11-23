@@ -1,0 +1,26 @@
+{% extends 'base.html' %}{% block title %}Adjust stock{% endblock %}
+{% block content %}
+<div class="head"><h1>Adjust stock</h1><a class="btn light" href="{{ url_for('inventory.index') }}">Back to inventory</a></div>
+<form method="post" class="card">{{ csrf() }}
+<div class="grid">
+  <div class="wide"><label>Product *</label><select name="product_id" required><option value="">Choose…</option>
+  {% for p in products %}<option value="{{ p.id }}" {{ 'selected' if sel == p.id }}>{{ p.name }} ({{ p.code }}), in stock {{ p.stock|qty }} {{ p.unit }}</option>{% endfor %}</select></div>
+  <div><label>Type *</label><select name="kind" id="kind">
+    <option value="damaged">Damaged (remove)</option><option value="expired">Expired (remove)</option>
+    <option value="lost">Lost / missing (remove)</option><option value="correction">Correction (+ add / − remove)</option></select></div>
+  <div><label>Quantity * <span class="muted" id="qhint">(how many to remove)</span></label><input name="qty" inputmode="decimal" required></div>
+  <div class="wide"><label>Reason *</label><input name="reason" required placeholder="e.g. broken during unloading"></div>
+</div>
+<div class="actions"><button>Save adjustment</button></div>
+</form>
+<h2>Recent adjustments</h2>
+<div class="card tablewrap" style="padding:0"><table><tr><th>Date</th><th>Product</th><th>Type</th><th class="n">Qty</th><th>Reason</th><th>User</th></tr>
+{% for m in recent %}<tr><td>{{ m.at }}</td><td>{{ m.name }}</td><td>{{ labels.get(m.move_type, m.move_type) }}</td><td class="n">{{ '+' if m.qty > 0 }}{{ m.qty|qty }} {{ m.unit }}</td><td>{{ m.reason }}</td><td>{{ m.username }}</td></tr>
+{% else %}<tr><td colspan="6" class="muted">None yet.</td></tr>{% endfor %}</table></div>
+{% endblock %}
+{% block scripts %}<script>
+document.getElementById('kind').addEventListener('change', function () {
+  document.getElementById('qhint').textContent = this.value === 'correction'
+    ? '(positive adds, negative removes, e.g. -2)' : '(how many to remove)';
+});
+</script>{% endblock %}

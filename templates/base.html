@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ setting('shop_name') }}{% endblock %} · AG Inventory</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+{% if g.user %}
+{% set ep = request.endpoint or '' %}
+<header class="top">
+  <a class="shop" href="{{ url_for('dash.index') }}">{{ setting('shop_name') }}</a>
+  <input type="checkbox" id="navtoggle"><label for="navtoggle" class="burger" aria-label="Menu">☰</label>
+  <nav>
+    {% if can('pos') %}<a class="sell" href="{{ url_for('sales.pos') }}">Sell (POS)</a>{% endif %}
+    <a href="{{ url_for('dash.index') }}" class="{{ 'on' if ep.startswith('dash.') }}">Dashboard</a>
+    {% if can('sales_view') %}<a href="{{ url_for('sales.index') }}" class="{{ 'on' if ep.startswith('sales.') and ep != 'sales.pos' }}">Sales</a>{% endif %}
+    {% if can('products') or can('inventory') %}<a href="{{ url_for('products.index') }}" class="{{ 'on' if ep.startswith('products.') }}">Products</a>{% endif %}
+    {% if can('inventory') %}<a href="{{ url_for('inventory.index') }}" class="{{ 'on' if ep.startswith('inventory.') }}">Inventory</a>{% endif %}
+    {% if can('purchases') or can('receive') %}<a href="{{ url_for('purchases.index') }}" class="{{ 'on' if ep.startswith('purchases.') }}">Purchases</a>{% endif %}
+    {% if can('suppliers') or can('purchases') %}<a href="{{ url_for('contacts.suppliers') }}" class="{{ 'on' if 'supplier' in ep }}">Suppliers</a>{% endif %}
+    {% if can('customers') or can('sales_view') %}<a href="{{ url_for('contacts.customers') }}" class="{{ 'on' if 'customer' in ep }}">Customers</a>{% endif %}
+    {% if can('expenses') %}<a href="{{ url_for('expenses.index') }}" class="{{ 'on' if ep.startswith('expenses.') }}">Expenses</a>{% endif %}
+    {% if can('reports') %}<a href="{{ url_for('reports.index') }}" class="{{ 'on' if ep.startswith('reports.') }}">Reports</a>{% endif %}
+    {% if g.user.role == 'Administrator' %}<a href="{{ url_for('admin.users') }}" class="{{ 'on' if ep.startswith('admin.') }}">Admin</a>{% endif %}
+  </nav>
+  <div class="user">{{ g.user.full_name }} <a href="{{ url_for('auth.password') }}">Password</a> <a href="{{ url_for('auth.logout') }}">Log out</a></div>
+</header>
+{% if low_stock %}<div class="lowbar">⚠ {{ low_stock }} product{{ 's' if low_stock != 1 }} at or below minimum stock. <a href="{{ url_for('inventory.index', low=1) }}">View</a></div>{% endif %}
+{% endif %}
+<main>
+  {% for cat, msg in get_flashed_messages(with_categories=true) %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
+  {% block content %}{% endblock %}
+</main>
+{% block scripts %}{% endblock %}
+</body>
+</html>

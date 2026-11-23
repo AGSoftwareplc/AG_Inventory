@@ -1,0 +1,23 @@
+{% extends 'base.html' %}{% block title %}Settings{% endblock %}
+{% block content %}{% include 'admin/_tabs.html' %}
+<h1>Settings</h1>
+<form method="post" class="card">{{ csrf() }}<div class="grid">
+<div><label>Shop name</label><input name="shop_name" value="{{ setting('shop_name') }}"></div>
+<div><label>Phone</label><input name="shop_phone" value="{{ setting('shop_phone') }}"></div>
+<div class="wide"><label>Address</label><input name="shop_address" value="{{ setting('shop_address') }}"></div>
+<div><label>Currency</label><input name="currency" value="{{ setting('currency') }}"></div>
+<div class="wide"><label>Payment methods (comma separated)</label><input name="payment_methods" value="{{ setting('payment_methods') }}"></div>
+<div class="wide"><label>Receipt footer</label><input name="receipt_footer" value="{{ setting('receipt_footer') }}"></div>
+<div class="wide"><label><input type="checkbox" name="allow_negative" value="1" {{ 'checked' if setting('allow_negative') == '1' }}> Allow selling below zero stock (not recommended)</label></div>
+</div><div class="actions"><button>Save settings</button></div></form>
+<div class="row">
+<div class="card"><h2 style="margin-top:0">Backup</h2>
+<p>A backup is made automatically once a day (the last 30 are kept) in:<br><code>{{ backup_dir }}</code></p>
+<form method="post" action="{{ url_for('admin.backup') }}">{{ csrf() }}<button>Make and download a backup now</button></form>
+{% if backups %}<p class="muted">Latest: {{ backups[0] }} ({{ backups|length }} kept)</p>{% endif %}
+<p class="muted">Copy backups to a USB stick or another computer regularly.</p></div>
+<form method="post" action="{{ url_for('admin.restore') }}" enctype="multipart/form-data" class="card" onsubmit="return confirm('Replace ALL current data with this backup? A copy of the current data is saved first.')">{{ csrf() }}
+<h2 style="margin-top:0">Restore</h2><p>Choose a backup file (<code>.db</code>). Everyone will need to log in again.</p>
+<input type="file" name="file" accept=".db" required><div class="actions"><button class="danger">Restore backup</button></div></form>
+</div>
+{% endblock %}

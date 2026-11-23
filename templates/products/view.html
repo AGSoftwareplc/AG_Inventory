@@ -1,0 +1,22 @@
+{% extends 'base.html' %}{% block title %}{{ p.name }}{% endblock %}
+{% block content %}
+<div class="head"><h1>{{ p.name }} <span class="muted">({{ p.code }})</span></h1>
+<div>{% if can('adjust') %}<a class="btn light" href="{{ url_for('inventory.adjust', pid=p.id) }}">Adjust stock</a>{% endif %}
+{% if can('products') %}<a class="btn" href="{{ url_for('products.edit', pid=p.id) }}">Edit</a>{% endif %}</div></div>
+<div class="tiles">
+  <div class="tile {{ 'bad' if p.min_stock > 0 and p.stock <= p.min_stock }}"><div class="k">In stock</div><div class="v">{{ p.stock|qty }} {{ p.unit }}</div><div class="muted">minimum {{ p.min_stock|qty }}</div></div>
+  <div class="tile"><div class="k">Selling price</div><div class="v">{{ p.price|money }}</div></div>
+  {% if can('reports') %}<div class="tile"><div class="k">Average cost</div><div class="v">{{ p.avg_cost|money }}</div></div>
+  <div class="tile"><div class="k">Stock value</div><div class="v">{{ (p.stock * p.avg_cost)|money }}</div></div>{% endif %}
+</div>
+<div class="card"><p><b>Category:</b> {{ p.cat or '-' }} · <b>Barcode:</b> {{ p.barcode or '-' }} · <b>Status:</b> {{ 'Active' if p.active else 'Inactive' }}</p>{% if p.description %}<p>{{ p.description }}</p>{% endif %}</div>
+<h2>Recent stock movements</h2>
+<div class="card tablewrap" style="padding:0"><table>
+<tr><th>Date</th><th>Type</th><th class="n">Qty</th><th class="n">Balance</th><th>Reference</th><th>Reason</th><th>User</th></tr>
+{% for m in moves %}<tr><td>{{ m.at }}</td><td>{{ m.move_type|replace('_',' ')|capitalize }}</td><td class="n">{{ '+' if m.qty > 0 }}{{ m.qty|qty }}</td><td class="n">{{ m.balance|qty }}</td><td>{{ m.ref_no }}</td><td>{{ m.reason }}</td><td>{{ m.username }}</td></tr>
+{% else %}<tr><td colspan="7" class="muted">No movements yet.</td></tr>{% endfor %}
+</table></div>
+<p><a href="{{ url_for('inventory.movements', pid=p.id, start='2000-01-01') }}">See all movements</a></p>
+{% if prices %}<h2>Price changes</h2><div class="card tablewrap" style="padding:0"><table><tr><th>Date</th><th class="n">Old</th><th class="n">New</th><th>User</th></tr>
+{% for c in prices %}<tr><td>{{ c.at }}</td><td class="n">{{ c.old_price|money }}</td><td class="n">{{ c.new_price|money }}</td><td>{{ c.username }}</td></tr>{% endfor %}</table></div>{% endif %}
+{% endblock %}

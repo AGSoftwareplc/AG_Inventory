@@ -1,0 +1,15 @@
+{% extends 'base.html' %}{% block title %}Stock movements{% endblock %}
+{% block content %}
+<div class="head"><h1>Stock movements</h1><a class="btn light" href="{{ url_for('inventory.index') }}">Back to inventory</a></div>
+<form class="filters">{% include '_range.html' %}
+  <div><label>Type</label><select name="type"><option value="">All</option>{% for k,l in labels.items() %}<option value="{{ k }}" {{ 'selected' if mtype == k }}>{{ l }}</option>{% endfor %}</select></div>
+  {% if request.args.pid %}<input type="hidden" name="pid" value="{{ request.args.pid }}">{% endif %}
+  <div style="flex:0"><button>Show</button></div></form>
+<div class="card tablewrap" style="padding:0"><table>
+<tr><th>Date/time</th><th>Product</th><th>Type</th><th class="n">Qty</th><th class="n">Balance</th><th>Reference</th><th>Reason</th><th>User</th></tr>
+{% for m in rows %}<tr><td>{{ m.at }}</td><td>{{ m.name }} <span class="muted">{{ m.code }}</span></td><td>{{ labels.get(m.move_type, m.move_type) }}</td>
+<td class="n">{{ '+' if m.qty > 0 }}{{ m.qty|qty }} {{ m.unit }}</td><td class="n">{{ m.balance|qty }}</td>
+<td>{% if m.ref_type == 'sale' %}<a href="{{ url_for('sales.view', sid=m.ref_id) }}">{{ m.ref_no }}</a>{% elif m.ref_type == 'purchase' %}<a href="{{ url_for('purchases.view', pur_id=m.ref_id) }}">{{ m.ref_no }}</a>{% else %}{{ m.ref_no }}{% endif %}</td>
+<td>{{ m.reason }}</td><td>{{ m.username }}</td></tr>
+{% else %}<tr><td colspan="8" class="muted">No movements in this period.</td></tr>{% endfor %}</table></div>
+{% endblock %}

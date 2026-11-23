@@ -1,0 +1,27 @@
+{% extends 'base.html' %}{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="head noprint"><h1>Reports</h1></div>
+<form class="filters" id="rf">
+  <div class="grow"><label>Report</label><select name="r" onchange="this.form.submit()">
+  {% for g, items in groups.items() %}<optgroup label="{{ g }}">{% for k, t, _f in items %}<option value="{{ k }}" {{ 'selected' if k == key }}>{{ t }}</option>{% endfor %}</optgroup>{% endfor %}</select></div>
+  {% if key not in ('stock','low','customer_balances','outstanding') %}{% include '_range.html' %}{% endif %}
+  {% if key == 'sales_period' %}<div><label>Group by</label><select name="group">{% for v in ['day','week','month'] %}<option {{ 'selected' if f.group == v }}>{{ v }}</option>{% endfor %}</select></div>{% endif %}
+  {% if key in ('stock','low','sales_product','sales_category','sales_user') %}<div><label>Category</label><select name="category"><option value="">All</option>{% for c in cats %}<option value="{{ c.id }}" {{ 'selected' if f.category == c.id }}>{{ c.name }}</option>{% endfor %}</select></div>{% endif %}
+  {% if key in ('moves','writeoffs','sales_product','purch_product') %}<div><label>Product</label><select name="product"><option value="">All</option>{% for p in products %}<option value="{{ p.id }}" {{ 'selected' if f.product == p.id }}>{{ p.name }}</option>{% endfor %}</select></div>{% endif %}
+  {% if key.startswith('purch') or key == 'outstanding' %}<div><label>Supplier</label><select name="supplier"><option value="">All</option>{% for s in sups %}<option value="{{ s.id }}" {{ 'selected' if f.supplier == s.id }}>{{ s.name }}</option>{% endfor %}</select></div>{% endif %}
+  <div style="flex:0"><button>Show</button></div>
+  <div style="flex:0"><button type="submit" name="format" value="xlsx" class="light">Excel</button></div>
+  <div style="flex:0"><button type="button" class="light" onclick="window.print()">Print / PDF</button></div>
+</form>
+<div class="card">
+  <h2 style="margin-top:0">{{ title }}</h2>
+  <p class="muted">{{ setting('shop_name') }} · {% if key not in ('stock','low','customer_balances','outstanding') %}{{ start }} to {{ end }} · {% endif %}amounts in {{ currency }}</p>
+  <div class="tablewrap"><table>
+  <tr>{% for l, k, kind in cols %}<th class="{{ 'n' if kind != 'text' }}">{{ l }}</th>{% endfor %}</tr>
+  {% for r in rows %}<tr>{% for l, k, kind in cols %}<td class="{{ 'n' if kind != 'text' }}">{% set v = r[k] %}{% if kind == 'money' %}{{ v|money }}{% elif kind == 'qty' %}{{ v|qty if v is not none }}{% else %}{{ v if v is not none }}{% endif %}</td>{% endfor %}</tr>
+  {% else %}<tr><td colspan="{{ cols|length }}" class="muted">No data for this selection.</td></tr>{% endfor %}
+  {% if tot and rows %}<tr class="total"><td>Total</td>{% for l, k, kind in cols[1:] %}<td class="n">{% if k in tot %}{{ tot[k]|money if kind == 'money' else (tot[k]|qty) }}{% endif %}</td>{% endfor %}</tr>{% endif %}
+  </table></div>
+</div>
+<p class="muted noprint">To save as PDF: click "Print / PDF" and choose "Save as PDF" as the printer.</p>
+{% endblock %}
