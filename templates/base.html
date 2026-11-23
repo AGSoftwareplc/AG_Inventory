@@ -9,35 +9,37 @@
 {% set ep = request.endpoint or '' %}
 <body class="{{ 'app' if g.user else '' }}">
 {% if g.user %}
-{# Side menu in the order of daily work: sell, buy, keep stock, money, administration #}
+{# Side menu in the order of daily work: sell, buy, keep stock, money, administration.
+   Each group has its own colour (see .g-* in style.css) and folds open/shut; the whole menu can shrink to icons. #}
 {% set menu = [
-  ('', [
-    ('sales.pos', 'Sell (POS)', can('pos'), ep == 'sales.pos', 'sell'),
-    ('dash.index', 'Dashboard', true, ep.startswith('dash.'), ''),
+  ('', 'main', [
+    ('sales.pos', 'Sell (POS)', can('pos'), ep == 'sales.pos', 'sell', '🛒'),
+    ('dash.index', 'Dashboard', true, ep.startswith('dash.'), '', '📊'),
   ]),
-  ('Selling', [
-    ('sales.index', 'Sales history', can('sales_view'), ep.startswith('sales.') and ep != 'sales.pos', ''),
-    ('contacts.customers', 'Customers', can('customers') or can('sales_view'), 'customer' in ep, ''),
+  ('Selling', 'selling', [
+    ('sales.index', 'Sales history', can('sales_view'), ep.startswith('sales.') and ep != 'sales.pos', '', '🧾'),
+    ('contacts.customers', 'Customers', can('customers') or can('sales_view'), 'customer' in ep, '', '👥'),
   ]),
-  ('Buying', [
-    ('purchases.index', 'Purchases & receiving', can('purchases') or can('receive'), ep.startswith('purchases.'), ''),
-    ('contacts.suppliers', 'Suppliers', can('suppliers') or can('purchases'), 'supplier' in ep, ''),
+  ('Buying', 'buying', [
+    ('purchases.index', 'Purchases & receiving', can('purchases') or can('receive'), ep.startswith('purchases.'), '', '📦'),
+    ('contacts.suppliers', 'Suppliers', can('suppliers') or can('purchases'), 'supplier' in ep, '', '🚚'),
   ]),
-  ('Stock', [
-    ('inventory.index', 'Stock levels', can('inventory'), ep == 'inventory.index', ''),
-    ('products.index', 'Products', can('products') or can('inventory'), ep.startswith('products.'), ''),
-    ('inventory.adjust', 'Adjust stock', can('adjust'), ep == 'inventory.adjust', ''),
-    ('inventory.stocktakes', 'Stocktake', can('adjust'), ep.startswith('inventory.stocktake'), ''),
-    ('inventory.movements', 'Stock movements', can('inventory'), ep == 'inventory.movements', ''),
+  ('Stock', 'stock', [
+    ('inventory.index', 'Stock levels', can('inventory'), ep == 'inventory.index', '', '📋'),
+    ('products.index', 'Products', can('products') or can('inventory'), ep.startswith('products.'), '', '🏷️'),
+    ('inventory.adjust', 'Adjust stock', can('adjust'), ep == 'inventory.adjust', '', '🛠️'),
+    ('inventory.stocktakes', 'Stocktake', can('adjust'), ep.startswith('inventory.stocktake'), '', '🔢'),
+    ('inventory.movements', 'Stock movements', can('inventory'), ep == 'inventory.movements', '', '🔁'),
   ]),
-  ('Money & reports', [
-    ('expenses.index', 'Expenses', can('expenses'), ep.startswith('expenses.'), ''),
-    ('reports.index', 'Reports', can('reports'), ep.startswith('reports.'), ''),
+  ('Money & reports', 'money', [
+    ('expenses.index', 'Expenses', can('expenses'), ep.startswith('expenses.'), '', '💸'),
+    ('reports.index', 'Reports', can('reports'), ep.startswith('reports.'), '', '📈'),
   ]),
-  ('Administration', [
-    ('admin.users', 'Users, settings & backup', g.user.role == 'Administrator', ep.startswith('admin.'), ''),
+  ('Administration', 'admin', [
+    ('admin.users', 'Users, settings & backup', g.user.role == 'Administrator', ep.startswith('admin.'), '', '⚙️'),
   ]),
 ] %}
+<script>try { if (localStorage.getItem('navMini') === '1') document.body.classList.add('mini'); } catch (e) {}</script>
 <header class="top">
   <label for="navtoggle" class="burger" aria-label="Menu">☰</label>
   <a class="shop" href="{{ url_for('dash.index') }}">{{ setting('shop_name') }}</a>
@@ -48,14 +50,41 @@
 </header>
 <input type="checkbox" id="navtoggle" hidden>
 <aside class="side">
-  {% for title, items in menu %}{% set shown = items|selectattr('2')|list %}{% if shown %}
-  <div class="group">{% if title %}<div class="gtitle">{{ title }}</div>{% endif %}
-    {% for endpoint, label, allowed, active, cls in shown %}<a href="{{ url_for(endpoint) }}" class="{{ cls }} {{ 'on' if active }}">{{ label }}</a>{% endfor %}
-  </div>{% endif %}{% endfor %}
-  <div class="group"><a href="#" onclick="openHelp();return false">Help / user manual</a></div>
+  <button type="button" class="minibtn" onclick="toggleMini()" title="Make the menu narrow / wide"><span class="ic">«</span><span class="lb">Narrow menu</span></button>
+  {% for title, key, items in menu %}{% set shown = items|selectattr('2')|list %}{% if shown %}
+  {% if title %}<details class="group g-{{ key }}" data-key="{{ key }}" open{{ ' data-active=1' if shown|selectattr('3')|list }}>
+    <summary class="gtitle">{{ title }}</summary>{% else %}<div class="group g-{{ key }}">{% endif %}
+    {% for endpoint, label, allowed, active, cls, icon in shown %}<a href="{{ url_for(endpoint) }}" class="{{ cls }} {{ 'on' if active }}" title="{{ label }}"><span class="ic">{{ icon }}</span><span class="lb">{{ label }}</span></a>{% endfor %}
+  {% if title %}</details>{% else %}</div>{% endif %}{% endif %}{% endfor %}
+  <div class="group g-help"><a href="#" onclick="openHelp();return false" title="Help / user manual"><span class="ic">❓</span><span class="lb">Help / user manual</span></a></div>
   <div class="group mobile-user"><div class="gtitle">{{ g.user.full_name }}</div>
     <a href="{{ url_for('auth.password') }}">Change password</a><a href="{{ url_for('auth.logout') }}">Log out</a></div>
 </aside>
+<script>
+// menu groups remember whether they are open; the current page's group is always open.
+// In the narrow (icons only) menu every group is shown.
+function navGroups() { return document.querySelectorAll('.side details.group'); }
+function applyShut() {
+  var shut = [];
+  try { shut = JSON.parse(localStorage.getItem('navShut') || '[]'); } catch (e) {}
+  var mini = document.body.classList.contains('mini');
+  navGroups().forEach(function (d) { d.open = mini || d.dataset.active || shut.indexOf(d.dataset.key) < 0; });
+}
+navGroups().forEach(function (d) {
+  d.addEventListener('toggle', function () {
+    if (document.body.classList.contains('mini')) return;
+    var list = [];
+    navGroups().forEach(function (x) { if (!x.open) list.push(x.dataset.key); });
+    try { localStorage.setItem('navShut', JSON.stringify(list)); } catch (e) {}
+  });
+});
+function toggleMini() {
+  var on = document.body.classList.toggle('mini');
+  try { localStorage.setItem('navMini', on ? '1' : '0'); } catch (e) {}
+  setTimeout(applyShut, 0);  // after any pending toggle events
+}
+applyShut();
+</script>
 <label for="navtoggle" class="scrim"></label>
 {% endif %}
 <div class="content">
