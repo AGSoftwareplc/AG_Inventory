@@ -6,7 +6,7 @@ A simple web app for small and medium shops. It covers the whole flow from purch
 - **Works offline:** it runs on the shop network without internet access.
 - **Several devices:** one PC runs the app, and other PCs, tablets and phones on the shop Wi-Fi use it in a browser.
 
-The requirements are in *Shop Inventory Management SRS v1.1*.
+The requirements are in *Shop Inventory Management SRS v1.1*. [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) shows how each acceptance criterion is checked.
 
 ## Install (one time)
 
@@ -40,7 +40,7 @@ Keep the window open while the shop is working. The window shows the address tha
 | Buy stock | **Purchases → New purchase** → *Save and confirm order*. When the goods arrive, open the purchase and click **Receive into stock**. Partial deliveries are fine. Record supplier payments and returns on the same page. |
 | Damaged, expired or lost stock | **Inventory → Adjust stock**. A reason is required. |
 | Physical count | **Inventory → Stocktake** → start → enter counts → **Post**. |
-| Expenses | **Expenses**. |
+| Expenses | **Expenses**. To correct a wrong entry, use *Reverse* on it. Entries are never deleted. |
 | Reports | **Reports**: choose a report and dates. **Excel** downloads a .xlsx file. For a PDF, click **Print / PDF** and choose *Save as PDF*. |
 | Users and rights | **Admin → Users** and **Admin → Role permissions**. |
 
@@ -50,6 +50,8 @@ Keep the window open while the shop is working. The window shows the address tha
 - **Admin → Settings → Make and download a backup now** saves a copy. Keep copies on a USB stick or another computer.
 - **To restore:** go to **Admin → Settings → Restore** and choose a `.db` backup file. The app saves a copy of the current data first.
 - **Manual restore:** stop the app, replace `data/shop.db` with the backup file, then start the app again.
+
+**Upgrading to a new version:** stop the app, replace the program files but keep `data/` and `backups/`, then run `install.bat` again. The database is updated automatically.
 
 To move the system to another PC, copy the whole folder, including `data/`, and run `install.bat` there.
 

@@ -2,6 +2,7 @@
 # One-time installation on Linux / macOS. Needs Python 3.10+ (sudo apt install python3 python3-venv).
 set -e
 cd "$(dirname "$0")"
+python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' || { echo "Python 3.10 or newer is required."; exit 1; }
 python3 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install -r requirements.txt

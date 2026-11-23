@@ -33,7 +33,8 @@ def index():
         return redirect(url_for('expenses.index'))
     start, end = date_range()
     cat = request.args.get('cat', type=int)
-    sql = ('SELECT e.*, c.name AS cat, u.username FROM expenses e JOIN expense_categories c ON '
+    sql = ('SELECT e.*, c.name AS cat, u.username, (SELECT r.ref_no FROM expenses r WHERE r.reversal_of=e.id) '
+           'AS reversed_by FROM expenses e JOIN expense_categories c ON '
            'c.id=e.category_id LEFT JOIN users u ON u.id=e.user_id WHERE e.date BETWEEN ? AND ?')
     args = [start, end]
     if cat:
@@ -43,6 +44,35 @@ def index():
     cats = db.execute('SELECT * FROM expense_categories ORDER BY name').fetchall()
     return render_template('expenses/index.html', rows=rows, cats=cats, start=start, end=end, cat=cat,
                            total=sum(r['amount'] for r in rows), methods=payment_methods(), today=today())
+
+
+@bp.route('/<int:eid>/reverse', methods=['POST'])
+@requires('expenses')
+def reverse(eid):
+    """Correct a wrong expense with a negative entry (expenses are never deleted)."""
+    reason = request.form.get('reason', '').strip()
+    try:
+        if not reason:
+            raise RuleError('A reason is required to reverse an expense.')
+        with tx() as db:
+            claim_once(db)
+            e = db.execute('SELECT * FROM expenses WHERE id=?', (eid,)).fetchone()
+            if not e:
+                raise RuleError('Expense not found.')
+            if e['reversal_of'] or e['amount'] < 0:
+                raise RuleError('A reversal entry cannot be reversed.')
+            if db.execute('SELECT 1 FROM expenses WHERE reversal_of=?', (eid,)).fetchone():
+                raise RuleError('This expense is already reversed.')
+            ref = next_no(db, 'E', 'expenses', 'ref_no')
+            db.execute('INSERT INTO expenses(ref_no, category_id, description, amount, date, method, user_id, '
+                       'reversal_of) VALUES (?,?,?,?,?,?,?,?)',
+                       (ref, e['category_id'], f"Reversal of {e['ref_no']}: {reason}", -e['amount'], today(),
+                        e['method'], g.user['id'], eid))
+            audit('expense_reverse', f"{e['ref_no']}: {reason}", db)
+        flash(f"Expense {e['ref_no']} reversed by {ref}.", 'ok')
+    except RuleError as err:
+        flash(str(err), 'error')
+    return redirect(url_for('expenses.index'))
 
 
 @bp.route('/categories', methods=['POST'])

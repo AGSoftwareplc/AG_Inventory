@@ -199,7 +199,8 @@ CREATE TABLE IF NOT EXISTS expenses (
   amount INTEGER NOT NULL,
   date TEXT NOT NULL,
   method TEXT NOT NULL,
-  user_id INTEGER REFERENCES users(id)
+  user_id INTEGER REFERENCES users(id),
+  reversal_of INTEGER REFERENCES expenses(id)   -- set on a correcting (negative) entry
 );
 CREATE INDEX IF NOT EXISTS ix_expenses_date ON expenses(date);
 

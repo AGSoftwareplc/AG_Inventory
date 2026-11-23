@@ -24,8 +24,9 @@ def index():
         args.append(cat)
     if low:
         sql += ' AND p.min_stock>0 AND p.stock<=p.min_stock'
-    rows = get_db().execute(sql + ' ORDER BY p.name', args).fetchall()
-    value = sum(r['stock'] * r['avg_cost'] for r in rows if r['stock'] > 0)
+    rows = get_db().execute(sql + ' ORDER BY p.name LIMIT 2000', args).fetchall()
+    value = get_db().execute('SELECT COALESCE(SUM(stock*avg_cost),0) FROM products WHERE active=1 '
+                             'AND stock>0').fetchone()[0]
     cats = get_db().execute('SELECT * FROM categories ORDER BY name').fetchall()
     return render_template('inventory/index.html', rows=rows, value=value, cats=cats, q=q, cat=cat,
                            low=low)

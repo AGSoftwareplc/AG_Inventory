@@ -309,6 +309,41 @@ class ShopTest(unittest.TestCase):
                   content_type='multipart/form-data')
         self.assertEqual(self.one('SELECT name FROM products WHERE id=?', p['id'])['name'], 'Item KEEP')
 
+    # ---------------------------------------------------------------- BR-007 / BR-008 for expenses
+    def test_expense_reversal(self):
+        self.post('/expenses/', {'category_id': 1, 'amount': '500', 'date': self._today()})
+        e = self.one('SELECT * FROM expenses')
+        self.post(f"/expenses/{e['id']}/reverse", {'reason': ''})
+        self.assertEqual(self.one('SELECT COUNT(*) n FROM expenses')['n'], 1)  # reason required
+        self.post(f"/expenses/{e['id']}/reverse", {'reason': 'typed wrong amount'})
+        self.post(f"/expenses/{e['id']}/reverse", {'reason': 'again'})  # only once
+        con = self.db()
+        rows = con.execute('SELECT amount, reversal_of FROM expenses ORDER BY id').fetchall()
+        con.close()
+        self.assertEqual([(r['amount'], r['reversal_of']) for r in rows], [(50000, None), (-50000, e['id'])])
+        import rules
+        con = self.db()
+        self.assertEqual(rules.profit(con, '2000-01-01', '2100-01-01')['expenses'], 0)
+        con.close()
+
+    # ---------------------------------------------------------------- security
+    def test_default_password_warning(self):
+        self.assertIn(b'default password', self.c.get('/').data)
+        self.post('/password', {'current': 'admin123', 'new': 'n3w-pass', 'confirm': 'n3w-pass'}, once=False)
+        self.assertNotIn(b'default password', self.c.get('/').data)
+        self.login('admin', 'n3w-pass')
+
+    def test_upgrade_old_database(self):
+        """A database from version 1.0 (no expenses.reversal_of) is upgraded on start."""
+        con = self.db()
+        con.execute('ALTER TABLE expenses DROP COLUMN reversal_of')
+        con.close()
+        create_app(self.dbfile, testing=True)
+        con = self.db()
+        cols = [r['name'] for r in con.execute('PRAGMA table_info(expenses)')]
+        con.close()
+        self.assertIn('reversal_of', cols)
+
     @staticmethod
     def _today():
         from datetime import date
