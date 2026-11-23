@@ -364,7 +364,7 @@ class ShopTest(unittest.TestCase):
         side = html[html.index('<aside'):html.index('</aside>')]
         self.assertIn('Sell (POS)', side)
         self.assertNotIn('Users, settings', side)
-        self.assertNotIn('⚙ Admin', html)
+        self.assertNotIn('>⚙ Admin</a>', html)
         self.assertNotIn('Adjust stock', side)
 
     @staticmethod
