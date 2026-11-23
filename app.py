@@ -57,6 +57,13 @@ def password():
     return render_template('password.html')
 
 
+@auth.route('/manual')
+@login_required
+def manual():
+    """The full user manual on one printable page (same text as the Help pop-up)."""
+    return render_template('manual.html')
+
+
 def low_stock_count():
     return get_db().execute('SELECT COUNT(*) FROM products WHERE active=1 AND stock<=min_stock '
                             'AND min_stock>0').fetchone()[0]

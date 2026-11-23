@@ -32,6 +32,9 @@ Keep the window open while the shop is working. The window shows the address tha
 
 ## Daily use
 
+The **side menu** follows the order of daily work: *Sell (POS)* and *Dashboard* first, then *Selling*, *Buying*, *Stock*, *Money & reports* and *Administration*. Each user sees only what their role allows. **Help** (top right, or the **F1** key) opens the user manual at the topic for the current page. The full manual can be printed from */manual*.
+
+
 | Task | Where |
 |---|---|
 | Sell | **Sell (POS)**: scan a barcode or type a name and press Enter. Leave *Amount paid* empty for the exact amount, then **Complete sale**, then print the receipt (A4). |

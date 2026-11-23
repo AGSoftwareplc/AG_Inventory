@@ -6,33 +6,102 @@
 <title>{% block title %}{{ setting('shop_name') }}{% endblock %} · AG Inventory</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
-{% if g.user %}
 {% set ep = request.endpoint or '' %}
+<body class="{{ 'app' if g.user else '' }}">
+{% if g.user %}
+{# Side menu in the order of daily work: sell, buy, keep stock, money, administration #}
+{% set menu = [
+  ('', [
+    ('sales.pos', 'Sell (POS)', can('pos'), ep == 'sales.pos', 'sell'),
+    ('dash.index', 'Dashboard', true, ep.startswith('dash.'), ''),
+  ]),
+  ('Selling', [
+    ('sales.index', 'Sales history', can('sales_view'), ep.startswith('sales.') and ep != 'sales.pos', ''),
+    ('contacts.customers', 'Customers', can('customers') or can('sales_view'), 'customer' in ep, ''),
+  ]),
+  ('Buying', [
+    ('purchases.index', 'Purchases & receiving', can('purchases') or can('receive'), ep.startswith('purchases.'), ''),
+    ('contacts.suppliers', 'Suppliers', can('suppliers') or can('purchases'), 'supplier' in ep, ''),
+  ]),
+  ('Stock', [
+    ('inventory.index', 'Stock levels', can('inventory'), ep == 'inventory.index', ''),
+    ('products.index', 'Products', can('products') or can('inventory'), ep.startswith('products.') and ep != 'products.cats', ''),
+    ('inventory.adjust', 'Adjust stock', can('adjust'), ep == 'inventory.adjust', ''),
+    ('inventory.stocktakes', 'Stocktake', can('adjust'), ep.startswith('inventory.stocktake'), ''),
+    ('inventory.movements', 'Stock movements', can('inventory'), ep == 'inventory.movements', ''),
+    ('products.cats', 'Categories', can('products'), ep == 'products.cats', ''),
+  ]),
+  ('Money & reports', [
+    ('expenses.index', 'Expenses', can('expenses'), ep.startswith('expenses.'), ''),
+    ('reports.index', 'Reports', can('reports'), ep.startswith('reports.'), ''),
+  ]),
+  ('Administration', [
+    ('admin.users', 'Users', g.user.role == 'Administrator', ep.startswith('admin.user'), ''),
+    ('admin.roles', 'Role permissions', g.user.role == 'Administrator', ep == 'admin.roles', ''),
+    ('admin.settings', 'Settings & backup', g.user.role == 'Administrator', ep == 'admin.settings', ''),
+    ('admin.audit_log', 'Audit log', g.user.role == 'Administrator', ep == 'admin.audit_log', ''),
+  ]),
+] %}
 <header class="top">
+  <label for="navtoggle" class="burger" aria-label="Menu">☰</label>
   <a class="shop" href="{{ url_for('dash.index') }}">{{ setting('shop_name') }}</a>
-  <input type="checkbox" id="navtoggle"><label for="navtoggle" class="burger" aria-label="Menu">☰</label>
-  <nav>
-    {% if can('pos') %}<a class="sell" href="{{ url_for('sales.pos') }}">Sell (POS)</a>{% endif %}
-    <a href="{{ url_for('dash.index') }}" class="{{ 'on' if ep.startswith('dash.') }}">Dashboard</a>
-    {% if can('sales_view') %}<a href="{{ url_for('sales.index') }}" class="{{ 'on' if ep.startswith('sales.') and ep != 'sales.pos' }}">Sales</a>{% endif %}
-    {% if can('products') or can('inventory') %}<a href="{{ url_for('products.index') }}" class="{{ 'on' if ep.startswith('products.') }}">Products</a>{% endif %}
-    {% if can('inventory') %}<a href="{{ url_for('inventory.index') }}" class="{{ 'on' if ep.startswith('inventory.') }}">Inventory</a>{% endif %}
-    {% if can('purchases') or can('receive') %}<a href="{{ url_for('purchases.index') }}" class="{{ 'on' if ep.startswith('purchases.') }}">Purchases</a>{% endif %}
-    {% if can('suppliers') or can('purchases') %}<a href="{{ url_for('contacts.suppliers') }}" class="{{ 'on' if 'supplier' in ep }}">Suppliers</a>{% endif %}
-    {% if can('customers') or can('sales_view') %}<a href="{{ url_for('contacts.customers') }}" class="{{ 'on' if 'customer' in ep }}">Customers</a>{% endif %}
-    {% if can('expenses') %}<a href="{{ url_for('expenses.index') }}" class="{{ 'on' if ep.startswith('expenses.') }}">Expenses</a>{% endif %}
-    {% if can('reports') %}<a href="{{ url_for('reports.index') }}" class="{{ 'on' if ep.startswith('reports.') }}">Reports</a>{% endif %}
-    {% if g.user.role == 'Administrator' %}<a href="{{ url_for('admin.users') }}" class="{{ 'on' if ep.startswith('admin.') }}">Admin</a>{% endif %}
-  </nav>
+  <div class="spacer"></div>
+  <button type="button" class="helpbtn" onclick="openHelp()" title="Help (F1)">? Help</button>
   <div class="user">{{ g.user.full_name }} <a href="{{ url_for('auth.password') }}">Password</a> <a href="{{ url_for('auth.logout') }}">Log out</a></div>
 </header>
-{% if low_stock %}<div class="lowbar">⚠ {{ low_stock }} product{{ 's' if low_stock != 1 }} at or below minimum stock. <a href="{{ url_for('inventory.index', low=1) }}">View</a></div>{% endif %}
+<input type="checkbox" id="navtoggle" hidden>
+<aside class="side">
+  {% for title, items in menu %}{% set shown = items|selectattr('2')|list %}{% if shown %}
+  <div class="group">{% if title %}<div class="gtitle">{{ title }}</div>{% endif %}
+    {% for endpoint, label, allowed, active, cls in shown %}<a href="{{ url_for(endpoint) }}" class="{{ cls }} {{ 'on' if active }}">{{ label }}</a>{% endfor %}
+  </div>{% endif %}{% endfor %}
+  <div class="group"><a href="#" onclick="openHelp();return false">Help / user manual</a></div>
+  <div class="group mobile-user"><div class="gtitle">{{ g.user.full_name }}</div>
+    <a href="{{ url_for('auth.password') }}">Change password</a><a href="{{ url_for('auth.logout') }}">Log out</a></div>
+</aside>
+<label for="navtoggle" class="scrim"></label>
 {% endif %}
+<div class="content">
+{% if g.user and low_stock %}<div class="lowbar">⚠ {{ low_stock }} product{{ 's' if low_stock != 1 }} at or below minimum stock. <a href="{{ url_for('inventory.index', low=1) }}">View</a></div>{% endif %}
 <main>
   {% for cat, msg in get_flashed_messages(with_categories=true) %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
   {% block content %}{% endblock %}
 </main>
+</div>
+{% if g.user %}
+{% set topic = 'pos' if ep == 'sales.pos' else 'sales' if ep.startswith('sales.') else 'customers' if 'customer' in ep
+   else 'suppliers' if 'supplier' in ep else 'purchases' if ep.startswith('purchases.') else 'products' if ep.startswith('products.')
+   else 'adjust' if ep == 'inventory.adjust' else 'stocktake' if ep.startswith('inventory.stocktake') else 'inventory' if ep.startswith('inventory.')
+   else 'expenses' if ep.startswith('expenses.') else 'reports' if ep.startswith('reports.') else 'admin' if ep.startswith('admin.')
+   else 'dashboard' if ep.startswith('dash.') else 'start' %}
+<dialog id="help" aria-label="Help">
+  <div class="helphead"><b>Help: user manual</b>
+    <span><a class="btn small light" href="{{ url_for('auth.manual') }}" target="_blank">Open full manual / print</a>
+    <button type="button" class="small" onclick="document.getElementById('help').close()">Close</button></span></div>
+  <div class="helpbody">
+    <nav class="helpnav" id="helpnav"></nav>
+    <div class="helptext" id="helptext">{% include '_help.html' %}</div>
+  </div>
+</dialog>
+<script>
+function openHelp(topic) {
+  var d = document.getElementById('help'), text = document.getElementById('helptext');
+  var secs = text.querySelectorAll('section'), nav = document.getElementById('helpnav');
+  if (!nav.childElementCount) secs.forEach(function (s) {
+    var b = document.createElement('button'); b.type = 'button'; b.textContent = s.dataset.title;
+    b.onclick = function () { show(s.id); }; b.dataset.for = s.id; nav.appendChild(b);
+  });
+  function show(id) {
+    secs.forEach(function (s) { s.hidden = s.id !== id; });
+    nav.querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.for === id); });
+    text.scrollTop = 0;
+  }
+  show('help-' + (topic || '{{ topic }}'));
+  if (!d.open) d.showModal();
+}
+document.addEventListener('keydown', function (e) { if (e.key === 'F1') { e.preventDefault(); openHelp(); } });
+</script>
+{% endif %}
 {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -1,0 +1,159 @@
+{# User manual. Each <section> is one Help topic; the pop-up shows the topic for the current page. #}
+<section id="help-start" data-title="Getting started">
+<h2>Getting started</h2>
+<p>AG Inventory follows how goods move through the shop. You buy from suppliers, receive the goods into stock, sell them at the POS, and then check money and reports.</p>
+<ol>
+  <li><b>First login:</b> username <code>admin</code>, password <code>admin123</code>. Change the password straight away with <b>Password</b> at the top right.</li>
+  <li><b>Set up the shop:</b> in <b>Settings &amp; backup</b>, enter the shop name, address, phone and payment methods. These appear on receipts.</li>
+  <li><b>Add your staff:</b> in <b>Users</b>, give each person a role. A Sales Attendant sells. An Inventory Manager buys, receives and counts stock.</li>
+  <li><b>Add products:</b> use <b>Products → New product</b>. For goods already on the shelf, enter the <i>Opening stock</i> and <i>Purchase cost</i>.</li>
+  <li><b>Start working:</b> sell with <b>Sell (POS)</b>, and buy with <b>Purchases &amp; receiving</b>.</li>
+</ol>
+<p><b>The menu on the left</b> is in the order of daily work. It shows only what your role is allowed to do. On a phone, tap ☰ to open it.</p>
+<p><b>Help:</b> click <b>? Help</b> or press <b>F1</b> on any page to read about that page.</p>
+</section>
+
+<section id="help-pos" data-title="Sell (POS)">
+<h2>Selling at the POS</h2>
+<ol>
+  <li><b>Add products:</b> scan the barcode, or type part of the name or code and press <b>Enter</b>. Use the ↑ ↓ keys to choose another match, or click it. Scanning the same product again adds 1 to its quantity.</li>
+  <li><b>Change a quantity:</b> type it in the <i>Qty</i> box. Decimals are allowed, for example 2.5 kg. To remove a line, click <b>×</b>.</li>
+  <li><b>Discount</b> (only if your role allows it): enter an amount or a percentage (%).</li>
+  <li><b>Amount paid:</b> enter the cash received and the change is shown. Leave it empty if the customer pays the exact total.</li>
+  <li>Click <b>Complete sale</b>, then <b>Print receipt</b>.</li>
+</ol>
+<p><b>Credit sale</b> (customer pays later): choose a registered customer and enter the part they paid now. You take the rest later on the sale page.</p>
+<p>A red <i>"only X in stock"</i> label means there isn't enough stock. The sale can't be completed until you lower the quantity.</p>
+<p>Clicking <b>Complete sale</b> twice by mistake doesn't record the sale twice.</p>
+</section>
+
+<section id="help-sales" data-title="Sales, returns & cancellations">
+<h2>Sales history, returns and cancellations</h2>
+<ul>
+  <li><b>Sales history</b> lists sales by date. Filter by <i>Unpaid / credit</i> to see customers who owe money. Click a receipt number to open it.</li>
+  <li><b>Receive a payment</b> (credit sale): open the sale, enter the amount and click <b>Save payment</b>.</li>
+  <li><b>Customer return:</b> open the sale, choose the item and quantity, and enter a reason. The items go back into stock. The refund is the item's price after its share of any discount. The screen tells you how much cash to give back.</li>
+  <li><b>Cancel a sale</b> (managers only): open the sale, enter a reason and click <b>Cancel sale</b>. All items go back into stock. A sale that already has returns can't be cancelled.</li>
+  <li><b>Reprint a receipt:</b> open the sale and click <b>Receipt</b>.</li>
+</ul>
+<p>Sales are never deleted. Every correction is recorded with the user and the reason.</p>
+</section>
+
+<section id="help-customers" data-title="Customers">
+<h2>Customers</h2>
+<p>Register customers who buy on credit or buy often. Each customer page shows their purchase history and how much they owe. You can use walk-in sales without registering anyone.</p>
+</section>
+
+<section id="help-purchases" data-title="Purchases & receiving">
+<h2>Buying stock: order, receive, pay</h2>
+<ol>
+  <li><b>Purchases → New purchase:</b> choose the supplier and add product lines with the quantity and unit cost. Add the supplier's discount if there is one.
+    <ul><li><b>Save as draft:</b> you can still change it, and stock isn't affected.</li>
+        <li><b>Save and confirm order:</b> the order is final.</li></ul></li>
+  <li><b>When the goods arrive:</b> open the purchase, check the <i>Receive now</i> quantities and click <b>Receive into stock</b>. If only part arrived, enter what actually came. The rest can be received later, and the status shows <i>Partially Received</i>.</li>
+  <li><b>Pay the supplier:</b> on the same page, use <i>Record payment to supplier</i>. Partial payments are fine, and the balance owed is shown.</li>
+  <li><b>Return to supplier:</b> for damaged or wrong goods, choose the line and quantity and enter a reason. Stock and the amount owed both go down.</li>
+</ol>
+<p><b>Cancel:</b> a purchase can be cancelled only before anything is received. After that, use a return.</p>
+<p><b>Cost:</b> the product cost is updated automatically as a weighted average. A purchase discount is spread over the lines.</p>
+</section>
+
+<section id="help-suppliers" data-title="Suppliers">
+<h2>Suppliers</h2>
+<p>Add each supplier with a contact person and phone number. The supplier page shows all purchases and the total amount the shop still owes them. You can deactivate a supplier you no longer use.</p>
+</section>
+
+<section id="help-inventory" data-title="Stock levels & movements">
+<h2>Stock levels and movements</h2>
+<ul>
+  <li><b>Stock levels</b> shows every active product with its quantity, minimum level and value at cost. Rows highlighted in yellow are at or below their minimum, which means it's time to reorder. The yellow bar at the top of every page counts them.</li>
+  <li><b>Stock movements</b> is the full history: every receiving, sale, return, adjustment and count, with the date, user, reference and balance after it.</li>
+</ul>
+<p>Stock changes only through these transactions, never by typing a number directly.</p>
+</section>
+
+<section id="help-products" data-title="Products & categories">
+<h2>Products and categories</h2>
+<ul>
+  <li><b>New product:</b> enter a unique code, the name, category, unit (pcs, kg, litre…), selling price and minimum stock level. A barcode is optional.</li>
+  <li><b>Opening stock:</b> for goods already in the shop, enter the quantity and purchase cost once, when you create the product.</li>
+  <li><b>Change a price:</b> edit the product. Old sales keep their old prices, and price changes are logged.</li>
+  <li><b>Stop selling a product:</b> untick <i>Active</i>. A product that has been used can't be deleted.</li>
+  <li><b>Categories:</b> group products, for example Drinks or Food. Use them in searches and reports.</li>
+</ul>
+</section>
+
+<section id="help-adjust" data-title="Adjust stock">
+<h2>Adjusting stock</h2>
+<p>Use this for stock that leaves the shop without a sale:</p>
+<ul>
+  <li><b>Damaged</b>, <b>Expired</b> or <b>Lost</b>: enter how many to remove.</li>
+  <li><b>Correction:</b> a positive number adds and a negative number (for example -2) removes.</li>
+</ul>
+<p>A reason is always required. Every adjustment is saved with your name and appears in the <i>Damaged / expired / lost</i> report.</p>
+</section>
+
+<section id="help-stocktake" data-title="Stocktake (counting)">
+<h2>Stocktake: counting the shelves</h2>
+<ol>
+  <li>Click <b>Start new count</b>, for all products or one category.</li>
+  <li>Click <b>Print count sheet</b> if you want to count on paper.</li>
+  <li>Type the counted quantities. Leave a product empty to skip it. Click <b>Save counts</b> as often as you like.</li>
+  <li>Check the <i>Difference</i> column, then click <b>Post stocktake</b>. Stock is set to the counted quantities, and each difference is recorded as a stocktake correction.</li>
+</ol>
+<p>Sales made while you are counting are taken into account when you post.</p>
+</section>
+
+<section id="help-expenses" data-title="Expenses">
+<h2>Expenses</h2>
+<p>Record running costs such as rent, electricity, salary or transport: choose the category, amount, date and payment method. You can add new categories on the same page.</p>
+<p><b>Mistake?</b> Click <b>Reverse</b> on the wrong entry and give a reason. A negative entry cancels it, and you then enter the correct expense. Expenses are never deleted.</p>
+</section>
+
+<section id="help-reports" data-title="Reports">
+<h2>Reports</h2>
+<p>Choose a report, set the dates and filters, then click <b>Show</b>.</p>
+<ul>
+  <li><b>Inventory:</b> current stock and value, low stock, movements, damaged/expired/lost, stocktake differences.</li>
+  <li><b>Sales:</b> by day, week or month; by product, category or user; returns; cancelled sales; customer balances.</li>
+  <li><b>Purchases:</b> history, by supplier, by product, outstanding supplier payments.</li>
+  <li><b>Financial:</b> profit summary, expenses, payment collection by method.</li>
+</ul>
+<p><b>Excel</b> downloads the report as an .xlsx file. For a PDF, click <b>Print / PDF</b> and choose <i>Save as PDF</i> as the printer.</p>
+<p><b>Profit:</b> gross profit = sales after discounts and returns − the cost of the goods sold. Net operating profit = gross profit − expenses.</p>
+</section>
+
+<section id="help-dashboard" data-title="Dashboard">
+<h2>Dashboard</h2>
+<p>The dashboard shows today's figures: sales, purchases, expenses, gross and net profit, stock value, low-stock products and best sellers. Change the dates to see another period. Staff without report rights see only counts, not money figures.</p>
+</section>
+
+<section id="help-admin" data-title="Users, settings & backup">
+<h2>Administration (administrators only)</h2>
+<ul>
+  <li><b>Users:</b> create one login per person. To stop someone logging in, untick <i>Active</i>. To reset a password, type a new one.</li>
+  <li><b>Role permissions:</b> tick what Sales Attendants and Inventory Managers may do, for example give discounts, cancel sales or see profit.</li>
+  <li><b>Settings:</b> shop details for receipts, currency, payment methods, receipt footer.</li>
+  <li><b>Backup:</b> a copy of the data is made automatically every day. Click <b>Make and download a backup now</b> and keep copies on a USB stick.</li>
+  <li><b>Restore:</b> choose a backup file and click <b>Restore backup</b>. Everyone then logs in again.</li>
+  <li><b>Audit log:</b> shows who did what, such as logins, price changes, cancellations, returns and adjustments.</li>
+</ul>
+</section>
+
+<section id="help-faq" data-title="Questions & problems">
+<h2>Questions and problems</h2>
+<dl>
+  <dt><b>Other computers or phones can't open the app.</b></dt>
+  <dd>Use the address shown in the black start window, for example <code>http://192.168.1.10:5000</code>, on the same Wi-Fi. Allow Python through the Windows firewall for private networks. The start window must stay open.</dd>
+  <dt><b>"Not enough stock" when selling.</b></dt>
+  <dd>The goods were not received into the system. Receive the purchase, or correct the stock with <i>Adjust stock</i>.</dd>
+  <dt><b>"This form was already submitted".</b></dt>
+  <dd>The page was sent twice, for example by a double click or a refresh. The first submission was saved, so nothing is missing.</dd>
+  <dt><b>"Form expired".</b></dt>
+  <dd>Reload the page and try again.</dd>
+  <dt><b>I see "Not allowed".</b></dt>
+  <dd>Your role doesn't have that permission. Ask the administrator.</dd>
+  <dt><b>Forgot a password.</b></dt>
+  <dd>An administrator can set a new one in <i>Users</i>.</dd>
+</dl>
+</section>

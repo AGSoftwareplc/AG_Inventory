@@ -1,0 +1,5 @@
+{% extends 'base.html' %}{% block title %}User manual{% endblock %}
+{% block content %}
+<div class="head"><h1>AG Inventory: user manual</h1><button class="light noprint" onclick="window.print()">Print / save as PDF</button></div>
+<div class="card manual">{% include '_help.html' %}</div>
+{% endblock %}

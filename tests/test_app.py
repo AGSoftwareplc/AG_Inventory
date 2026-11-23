@@ -344,6 +344,27 @@ class ShopTest(unittest.TestCase):
         con.close()
         self.assertIn('reversal_of', cols)
 
+    # ---------------------------------------------------------------- side menu and help
+    def test_side_menu_order_and_help(self):
+        html = self.c.get('/').data.decode()
+        order = ['Sell (POS)', 'Dashboard', 'Sales history', 'Purchases &amp; receiving', 'Stock levels',
+                 'Expenses', 'Reports', 'Users']
+        side = html[html.index('<aside'):html.index('</aside>')]
+        pos = [side.index(label) for label in order]
+        self.assertEqual(pos, sorted(pos))
+        self.assertIn('id="help-dashboard"', html)  # help pop-up with the manual
+        self.assertIn("'help-' + (topic || 'dashboard')", html)  # opens at this page's topic
+        self.assertIn("|| 'pos')", self.c.get('/sales/pos').data.decode())
+        self.assertEqual(self.c.get('/manual').status_code, 200)
+        self.post('/admin/users/new', {'username': 'sara', 'full_name': 'Sara', 'role': 'Sales Attendant',
+                                       'password': 'secret1', 'active': '1'}, once=False)
+        self.login('sara', 'secret1')
+        html = self.c.get('/').data.decode()
+        side = html[html.index('<aside'):html.index('</aside>')]
+        self.assertIn('Sell (POS)', side)
+        self.assertNotIn('Role permissions', side)
+        self.assertNotIn('Adjust stock', side)
+
     @staticmethod
     def _today():
         from datetime import date
