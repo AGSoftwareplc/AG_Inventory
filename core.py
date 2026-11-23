@@ -91,6 +91,36 @@ def products_select(con, branch_sql):
             'FROM main.products p LEFT JOIN main.product_stock s ON s.product_id=p.id AND s.branch_id=' + branch_sql)
 
 
+BRANCH_TABLES = ('sales', 'purchases', 'expenses', 'returns', 'stock_moves', 'stocktakes')
+BRANCH_CHILDREN = (('sale_items', 'sale_id', 'sales'), ('sale_payments', 'sale_id', 'sales'),
+                   ('purchase_items', 'purchase_id', 'purchases'), ('purchase_payments', 'purchase_id', 'purchases'),
+                   ('stocktake_items', 'stocktake_id', 'stocktakes'))
+
+
+def report_db(branch):
+    """A read-only connection for the dashboard and reports that sees one branch, or all when branch is None.
+
+    Views for this connection only take the place of the branch tables (same names), so every report
+    query works unchanged for one branch or for the whole business. Never write through it."""
+    con = connect(db_path())
+    if branch:
+        b = int(branch)
+        for t in BRANCH_TABLES:
+            con.execute(f'CREATE TEMP VIEW {t} AS SELECT * FROM main.{t} WHERE branch_id={b}')
+        for t, key, parent in BRANCH_CHILDREN:
+            con.execute(f'CREATE TEMP VIEW {t} AS SELECT * FROM main.{t} WHERE {key} IN '
+                        f'(SELECT id FROM main.{parent} WHERE branch_id={b})')
+        con.execute('CREATE TEMP VIEW products AS ' + products_select(con, str(b)))
+    else:  # whole business: stock added up, cost weighted over the branches
+        cols = [r['name'] for r in con.execute('PRAGMA main.table_info(products)') if r['name'] not in ('stock', 'avg_cost')]
+        con.execute('CREATE TEMP VIEW products AS SELECT ' + ', '.join(f'p.{c}' for c in cols) +
+                    ', COALESCE(SUM(s.stock), 0) AS stock, CASE WHEN SUM(s.stock) > 0 THEN SUM(s.stock*s.avg_cost)/SUM(s.stock) '
+                    'ELSE p.avg_cost END AS avg_cost, p.stock AS total_stock, COUNT(s.product_id) > 0 AS in_branch '
+                    'FROM main.products p LEFT JOIN main.product_stock s ON s.product_id=p.id GROUP BY p.id')
+    con.execute('CREATE TEMP VIEW pv AS SELECT * FROM temp.products')
+    return con
+
+
 def _current_branch():
     try:
         return branch_id()
@@ -105,7 +135,7 @@ def add_branch_view(con):
 
 
 def close_db(_exc=None):
-    for key in ('db', 'pdb'):
+    for key in ('db', 'pdb', 'rdb'):
         con = g.pop(key, None)
         if con is not None:
             con.close()

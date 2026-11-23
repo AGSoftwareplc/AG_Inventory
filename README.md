@@ -5,6 +5,7 @@ A simple web app for small and medium shops. It covers the whole flow from purch
 - **Easy to install:** you only need Python. There's no Docker and no database server. The data lives in one SQLite file.
 - **Works offline:** it runs on the shop network without internet access.
 - **Several devices:** one PC runs the app, and other PCs, tablets and phones on the shop Wi-Fi use it in a browser.
+- **Several businesses and branches:** each business has its own data, profile and logo. Inside a business, each branch has its own stock, sales and expenses, and stock moves between branches with transfers.
 
 The requirements are in *Shop Inventory Management SRS v1.1*. [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) shows how each acceptance criterion is checked. [docs/TECH_STACK.md](docs/TECH_STACK.md) describes the technology used and how the code is organised.
 
@@ -63,6 +64,7 @@ The **side menu** follows the order of daily work: *Sell (POS)* and *Dashboard* 
 - **Admin → Settings → Make and download a backup now** saves a copy. Keep copies on a USB stick or another computer.
 - **To restore:** go to **Admin → Settings → Restore** and choose a `.db` backup file. The app saves a copy of the current data first.
 - **Manual restore:** stop the app, replace `data/shop.db` with the backup file, then start the app again.
+- A backup covers the business you are logged in to. Each business has its own data file in `data/` (`shop.db` for the first one, `biz-2.db` and so on), plus `platform.db` with the list of businesses.
 
 **Upgrading to a new version:** stop the app, replace the program files but keep `data/` and `backups/`, then run `install.bat` again. The database is updated automatically.
 

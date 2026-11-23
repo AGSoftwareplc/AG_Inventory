@@ -44,6 +44,13 @@ Each screen area is its own Flask *blueprint* (one `.py` file), so a change touc
 - Every stock change is written to `stock_moves` with the user and a reference.
 - Nothing that affects money or stock is deleted. Mistakes are corrected with returns, cancellations, reversals and adjustments.
 
+## Businesses and branches
+
+- **Each business has its own SQLite file**, so one business can never see another's data. Business 1 is `data/shop.db`; new ones are `data/biz-<id>.db`. A small `data/platform.db` lists the businesses and which business each username belongs to. The Super Admin adds or closes businesses in **⚙ Admin → Businesses**.
+- **Branches** live inside a business. Products, prices, customers, suppliers and users are shared by the business. Stock and average cost are kept per branch (`product_stock`), and sales, purchases, expenses, returns, stocktakes and stock moves record their branch. Document numbers start with the branch code, for example `MAIN-S-000042`.
+- **Transfers** move stock between branches at the sending branch's average cost: sent, then received (or cancelled).
+- The dashboard and reports show one branch, or all branches for an administrator (`core.report_db`).
+
 ## Data, backups and upgrades
 
 | What | Where / how |

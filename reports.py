@@ -6,18 +6,55 @@ from xml.sax.saxutils import escape
 
 from flask import Blueprint, Response, g, render_template, request
 
-from core import can, date_range, get_db, login_required, requires, setting, uses_starter_password
+import core
+from core import ADMIN, branch_id, can, date_range, get_db, login_required, requires, setting, uses_starter_password
 import rules
 
 dash = Blueprint('dash', __name__)
 bp = Blueprint('reports', __name__, url_prefix='/reports')
 
 
+# ---------------------------------------------------------------- which branch the figures are for
+def report_branch():
+    """Branch chosen on the dashboard or report (?branch=), default the one in the top bar.
+    None = all branches (administrators only)."""
+    v = request.args.get('branch', '')
+    if v == 'all' and g.user['role'] == ADMIN:
+        return None
+    mine = {b['id'] for b in g.branches}
+    return int(v) if v.isdigit() and int(v) in mine else branch_id()
+
+
+def rdb():
+    """Read-only connection that sees only the chosen branch (see core.report_db)."""
+    if 'rdb' not in g:
+        g.rdb = core.report_db(report_branch())
+    return g.rdb
+
+
+def branch_choice():
+    """Options for the branch box: [(value, label, selected)]; empty when there is only one branch."""
+    if len(g.branches) < 2:
+        return []
+    cur = report_branch()
+    opts = [(str(b['id']), b['name'], b['id'] == cur) for b in g.branches]
+    if g.user['role'] == ADMIN:
+        opts.insert(0, ('all', 'All branches', cur is None))
+    return opts
+
+
+def branch_label():
+    cur = report_branch()
+    if cur is None:
+        return 'All branches'
+    return next((b['name'] for b in g.branches if b['id'] == cur), '')
+
+
 # ---------------------------------------------------------------- dashboard
 @dash.route('/')
 @login_required
 def index():
-    db = get_db()
+    db = rdb()
     t = date.today().isoformat()
     start = request.args.get('start') or t
     end = request.args.get('end') or t
@@ -54,8 +91,27 @@ def index():
     key = 'v' if money else 'q'
     top = max([r[key] for r in best] + [1])
     charts['best'] = [(r, 100 * r[key] / top) for r in best]
+    if money and report_branch() is None:  # all branches: how each branch is doing
+        charts['branches'] = by_branch(start, end)
     return render_template('dashboard.html', d=d, p=p, low=low, best=best, start=start, end=end, today=t, weak=weak,
-                           show_money=money, charts=charts, short=short)
+                           show_money=money, charts=charts, short=short, branch_opts=branch_choice(),
+                           branch_name=branch_label())
+
+
+def by_branch(start, end):
+    """Net sales, gross profit and stock value per branch (all branches)."""
+    out = []
+    for b in g.branches:
+        con = core.report_db(b['id'])
+        try:
+            p = rules.profit(con, start, end)
+            stock = con.execute('SELECT COALESCE(SUM(stock*avg_cost),0) FROM products WHERE active=1 AND stock>0').fetchone()[0]
+        finally:
+            con.close()
+        out.append({'branch': b['name'], 'code': b['code'], 'sales_count': p['sales_count'], 'net_sales': p['net_sales'],
+                    'gross_profit': p['gross_profit'], 'expenses': p['expenses'], 'net_profit': p['net_profit'],
+                    'stock_value': stock})
+    return out
 
 
 # ---------------------------------------------------------------- dashboard charts (plain SVG/HTML, no library)
@@ -367,6 +423,31 @@ def r_collections(db, s, e, f):
     return [('Type', 'dir', T), ('Method', 'method', T), ('Count', 'n', N), ('Total', 'total', M)], rows
 
 
+def r_branch_sales(db, s, e, f):
+    return [('Branch', 'branch', T), ('Sales', 'sales_count', N), ('Net sales', 'net_sales', M),
+            ('Gross profit', 'gross_profit', M), ('Expenses', 'expenses', M), ('Est. net profit', 'net_profit', M)], \
+        by_branch(s, e)
+
+
+def r_branch_stock(db, s, e, f):
+    rows = []
+    for b in g.branches:
+        con = core.report_db(b['id'])
+        try:
+            sql = 'SELECT p.code, p.name, p.unit, p.stock, p.avg_cost, p.stock*p.avg_cost AS value FROM products p ' \
+                  'WHERE p.active=1 AND p.stock<>0'
+            args = []
+            if f['category']:
+                sql += ' AND p.category_id=?'
+                args.append(f['category'])
+            for r in con.execute(sql + ' ORDER BY p.name', args):
+                rows.append(dict(r, branch=b['name']))
+        finally:
+            con.close()
+    return [('Branch', 'branch', T), ('Code', 'code', T), ('Product', 'name', T), ('Unit', 'unit', T),
+            ('Stock', 'stock', Q), ('Avg cost', 'avg_cost', M), ('Stock value', 'value', M)], rows
+
+
 REPORTS = {
     'Inventory': [('stock', 'Current stock and valuation', r_stock), ('low', 'Low stock', r_low),
                   ('moves', 'Stock movements', r_moves),
@@ -385,7 +466,10 @@ REPORTS = {
     'Financial': [('profit', 'Profit summary', r_profit), ('expenses', 'Expenses by category', r_expenses),
                   ('expense_list', 'Expense list', r_expense_list),
                   ('collections', 'Payment collection', r_collections)],
+    'Branches': [('branch_sales', 'Sales and profit by branch', r_branch_sales),
+                 ('branch_stock', 'Stock by branch', r_branch_stock)],
 }
+BY_BRANCH = {'branch_sales', 'branch_stock'}  # these compare all branches; the others follow the branch box
 ALL = {k: (title, fn) for group in REPORTS.values() for k, title, fn in group}
 
 
@@ -402,9 +486,9 @@ def totals(cols, rows):
 @bp.route('/')
 @requires('reports')
 def index():
-    db = get_db()
+    db = rdb()
     key = request.args.get('r', 'stock')
-    if key not in ALL:
+    if key not in ALL or (key in BY_BRANCH and g.user['role'] != ADMIN):
         key = 'stock'
     start, end = date_range()
     f = {'category': request.args.get('category', type=int), 'product': request.args.get('product', type=int),
@@ -412,15 +496,18 @@ def index():
     title, fn = ALL[key]
     cols, rows = fn(db, start, end, f)
     tot = totals(cols, rows) if key != 'profit' else {}
+    where = 'All branches' if key in BY_BRANCH else branch_label()
     if request.args.get('format') == 'xlsx':
-        return xlsx_response(title, start, end, cols, rows, tot)
+        return xlsx_response(title, start, end, cols, rows, tot, where)
     lists = {
         'cats': db.execute('SELECT id, name FROM categories ORDER BY name').fetchall(),
         'products': db.execute('SELECT id, code, name FROM products ORDER BY name').fetchall(),
         'sups': db.execute('SELECT id, name FROM suppliers ORDER BY name').fetchall(),
     }
     return render_template('reports.html', groups=REPORTS, key=key, title=title, cols=cols, rows=rows,
-                           tot=tot, start=start, end=end, f=f, **lists)
+                           tot=tot, start=start, end=end, f=f, branch_opts=[] if key in BY_BRANCH else branch_choice(),
+                           where=where if len(g.branches) > 1 else '', by_branch=BY_BRANCH,
+                           show_branch_reports=g.user['role'] == ADMIN and len(g.branches) > 1, **lists)
 
 
 # ---------------------------------------------------------------- minimal .xlsx writer
@@ -515,8 +602,8 @@ def xlsx_bytes(title, subtitle, cols, rows, tot):
     return buf.getvalue()
 
 
-def xlsx_response(title, start, end, cols, rows, tot):
-    sub = f"{setting('shop_name')} | {start} to {end} | amounts in {setting('currency')}"
+def xlsx_response(title, start, end, cols, rows, tot, where=''):
+    sub = f"{setting('shop_name')}{' | ' + where if where else ''} | {start} to {end} | amounts in {setting('currency')}"
     data = xlsx_bytes(title, sub, cols, rows, tot)
     fname = title.lower().replace(' ', '-').replace('/', '-') + f'-{start}-{end}.xlsx'
     return Response(data, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

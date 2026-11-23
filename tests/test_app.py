@@ -552,6 +552,56 @@ class ShopTest(unittest.TestCase):
         row = self.one("SELECT ps.stock FROM product_stock ps JOIN products p ON p.id=ps.product_id WHERE p.code='OLD'")
         self.assertEqual(row['stock'], 7)
 
+    def test_reports_and_dashboard_by_branch(self):
+        p = self.stocked_product()  # 20 at Main
+        self.post('/admin/branches/new', {'code': 'BOLE', 'name': 'Bole shop', 'active': '1'}, once=False)
+        bole = self.one("SELECT id FROM branches WHERE code='BOLE'")['id']
+        self.post('/inventory/transfers/new', {'to_branch': str(bole), 'pid': [str(p['id'])], 'qty': ['5']})
+        t = self.one('SELECT id FROM transfers')['id']
+        item = self.one('SELECT id FROM transfer_items')['id']
+        self.post('/branch', {'branch': str(bole)}, once=False)
+        self.post(f'/inventory/transfers/{t}', {'receive': '1', f'r_{item}': '5'}, once=False)
+        self.sell([(p['id'], 2)], tendered='300')  # Bole: 300.00
+        self.post('/branch', {'branch': '1'}, once=False)
+        self.sell([(p['id'], 1)], tendered='150')  # Main: 150.00
+        html = self.c.get('/').data.decode()  # dashboard follows the branch in the top bar
+        self.assertIn('150.00', html)
+        self.assertNotIn('450.00', html)
+        html = self.c.get('/?branch=all').data.decode()
+        self.assertIn('450.00', html)
+        self.assertIn('Branches compared', html)
+        html = self.c.get(f'/reports/?r=stock&branch={bole}').data.decode()
+        self.assertIn('Bole shop', html)
+        self.assertIn('<td class="n">3</td>', html)
+        rows = self.c.get('/reports/?r=branch_sales').data.decode()
+        self.assertIn('Main branch', rows)
+        self.assertIn('300.00', rows)
+        self.assertIn(b'Stock by branch', self.c.get('/reports/?r=branch_stock').data)
+        # a cashier only sees their own branch and cannot ask for all branches
+        self.post('/admin/users/new', {'username': 'boleuser', 'full_name': 'B', 'role': 'Sales Attendant',
+                                        'password': 'secret1', 'active': '1', 'branch': [str(bole)]}, once=False)
+        self.login('boleuser', 'secret1')
+        html = self.c.get('/?branch=all').data.decode()
+        self.assertNotIn('Branches compared', html)
+
+    def test_super_admin_manages_businesses(self):
+        r = self.post('/admin/businesses', {'name': 'Second Shop', 'code': 'sec', 'admin_username': 'owner2',
+                                            'admin_name': 'Owner Two', 'admin_password': 'secret2'},
+                      once=False, follow_redirects=True)
+        self.assertIn(b'Business created', r.data)
+        self.assertIn(b'Second Shop', r.data)
+        r = self.post('/admin/businesses', {'name': 'Again', 'code': 'SEC', 'admin_username': 'x9',
+                                            'admin_name': 'X', 'admin_password': 'secret9'}, once=False)
+        self.assertIn(b'already uses this code', r.data)
+        self.login('owner2', 'secret2')
+        self.assertEqual(self.c.get('/admin/businesses').status_code, 403)  # not a Super Admin
+        self.login('admin', 'admin123')
+        self.post('/admin/businesses', {'toggle': '2'}, once=False)  # close it: nobody can log in
+        r = self.post('/login', {'username': 'owner2', 'password': 'secret2'}, once=False, follow_redirects=True)
+        self.assertIn(b'Wrong username or password', r.data)
+        r = self.post('/admin/businesses', {'toggle': '1'}, once=False, follow_redirects=True)
+        self.assertIn(b'cannot close your own business', r.data)
+
     def test_business_profile_and_logo(self):
         png = (b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00'
                b'\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00'

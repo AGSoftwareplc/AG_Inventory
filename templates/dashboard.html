@@ -2,8 +2,8 @@
 {% block content %}
 {% if weak %}<div class="flash error">Security: you are still using the starter password for "{{ g.user.username }}". <a href="{{ url_for('auth.password') }}">Change it now</a>.</div>{% endif %}
 <div class="head"><h1>Dashboard</h1>
-<form class="filters noprint" style="margin:0">{% include '_range.html' %}<div style="flex:0"><button>Show</button></div></form></div>
-<p class="muted">{{ 'Today' if start == end and start == today else start ~ ' to ' ~ end }}</p>
+<form class="filters noprint" style="margin:0">{% if branch_opts %}<div><label>Branch</label><select name="branch" onchange="this.form.submit()">{% for v, label, sel in branch_opts %}<option value="{{ v }}" {{ 'selected' if sel }}>{{ label }}</option>{% endfor %}</select></div>{% endif %}{% include '_range.html' %}<div style="flex:0"><button>Show</button></div></form></div>
+<p class="muted">{% if branch_opts %}{{ branch_name }} · {% endif %}{{ 'Today' if start == end and start == today else start ~ ' to ' ~ end }}</p>
 <div class="tiles">
   {% if show_money %}
   <div class="tile"><div class="k">Net sales</div><div class="v">{{ p.net_sales|money }}</div><div class="muted">{{ p.sales_count }} sales</div></div>
@@ -48,6 +48,16 @@
   </svg></div>
   {% if t.empty %}<p class="muted" style="margin:0">No sales in this period yet.</p>{% else %}<p class="muted hint">Point at a bar to see the amount.</p>{% endif %}
 </div>
+
+{% if charts.branches %}{% set top = [charts.branches|map(attribute='net_sales')|max, 1]|max %}
+<div class="card chart"><h2>Branches compared <small class="muted">· net sales, with gross profit and stock value</small></h2>
+  <div class="hbars">{% for b in charts.branches %}
+    <div class="hb"><span title="{{ b.branch }}">{{ b.branch }}</span><div class="track"><div class="fill s{{ loop.index0 % 4 + 1 }}" style="width:{{ '%.1f'|format([100 * b.net_sales / top, 0]|max) }}%"></div></div>
+      <b>{{ b.net_sales|money }}</b></div>
+    <p class="muted hint" style="margin:-.2rem 0 .5rem">{{ b.sales_count }} sales · gross profit {{ b.gross_profit|money }} · stock value {{ b.stock_value|money }}</p>{% endfor %}
+  </div>
+  <p class="muted hint"><a href="{{ url_for('reports.index', r='branch_sales', start=start, end=end) }}">Sales and profit by branch report</a></p>
+</div>{% endif %}
 
 <div class="row">
   {% if show_money %}
