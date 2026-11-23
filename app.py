@@ -19,11 +19,15 @@ auth = Blueprint('auth', __name__)
 @auth.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        u = get_db().execute('SELECT * FROM users WHERE username=?',
-                             (request.form.get('username', '').strip(),)).fetchone()
+        name = request.form.get('username', '').strip()
+        # find the user's business first: each business has its own database
+        login = core.get_platform().execute('SELECT business_id FROM logins WHERE username=?', (name,)).fetchone()
+        u = None
+        if login and core.use_business(login['business_id']):
+            u = get_db().execute('SELECT * FROM users WHERE username=?', (name,)).fetchone()
         if u and u['active'] and check_password_hash(u['password_hash'], request.form.get('password', '')):
             session.clear()
-            session['uid'] = u['id']
+            session['uid'], session['bid'] = u['id'], login['business_id']
             g.user = u
             audit('login', u['username'])
             nxt = request.args.get('next', '')
@@ -89,7 +93,11 @@ def create_app(database=None, testing=False):
         SESSION_COOKIE_SAMESITE='Lax',
         SEND_FILE_MAX_AGE_DEFAULT=0,  # browsers re-check CSS/JS, so updates show without clearing the cache
     )
-    core.init_db(app.config['DATABASE'])
+    core.backup_before_upgrade(app.config['DATABASE'], app.config['BACKUP_DIR'])
+    # one small platform file lists the businesses; each business has its own database file
+    app.config['PLATFORM_DB'] = os.path.join(os.path.dirname(os.path.abspath(app.config['DATABASE'])),
+                                             'platform.db')
+    core.init_platform(app.config['PLATFORM_DB'], app.config['DATABASE'])
 
     import admin, contacts, expenses, inventory, products, purchases, reports, sales
     for bp in (auth, reports.dash, admin.bp, contacts.bp, expenses.bp, inventory.bp, products.bp,

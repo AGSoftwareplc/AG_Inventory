@@ -37,6 +37,8 @@ def user_edit(uid=None):
                 raise RuleError('Password must be at least 6 characters.')
             if u and u['id'] == g.user['id'] and (role != ADMIN or not active):
                 raise RuleError('You cannot remove your own administrator access.')
+            if core.username_taken(username, g.business['id']):  # usernames are unique across businesses
+                raise RuleError('This username is already taken.')
             with tx() as db:
                 if u:
                     db.execute('UPDATE users SET username=?, full_name=?, role=?, active=? WHERE id=?',
@@ -48,6 +50,8 @@ def user_edit(uid=None):
                     uid = db.execute('INSERT INTO users(username, full_name, password_hash, role, active) '
                                      'VALUES (?,?,?,?,?)', (username, name, generate_password_hash(pw),
                                                             role, active)).lastrowid
+                    db.execute('INSERT INTO user_branches(user_id, branch_id) VALUES (?, 1)', (uid,))
+                core.register_login(u['username'] if u else None, username, g.business['id'])
                 audit('user_save', f'{username} role={role} active={active}', db)
             flash('User saved.', 'ok')
             return redirect(url_for('admin.users'))
@@ -118,6 +122,9 @@ def restore():
     try:
         f.save(tmp)
         core.restore_db(tmp)
+        bcon = core.connect(core.db_path())
+        core.sync_logins(core.get_platform(), g.business['id'], bcon)
+        bcon.close()
         flash('Backup restored. Please log in again.', 'ok')
         return redirect(url_for('auth.logout'))
     except RuleError as e:

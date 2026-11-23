@@ -14,6 +14,23 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
 
+-- Branches of this business (shops, stores, warehouses). Branch 1 = the Main branch.
+CREATE TABLE IF NOT EXISTS branches (
+  id INTEGER PRIMARY KEY,
+  code TEXT NOT NULL UNIQUE COLLATE NOCASE,   -- used in document numbers, e.g. MAIN-S-000042
+  name TEXT NOT NULL,
+  address TEXT NOT NULL DEFAULT '',
+  phone TEXT NOT NULL DEFAULT '',
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+
+CREATE TABLE IF NOT EXISTS user_branches (   -- which branches a user may work in
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  branch_id INTEGER NOT NULL REFERENCES branches(id),
+  PRIMARY KEY (user_id, branch_id)
+);
+
 CREATE TABLE IF NOT EXISTS role_permissions (
   role TEXT NOT NULL, perm TEXT NOT NULL, PRIMARY KEY (role, perm)
 );
