@@ -31,6 +31,7 @@
     ('inventory.adjust', 'Adjust stock', can('adjust'), ep == 'inventory.adjust', '', '🛠️'),
     ('inventory.stocktakes', 'Stocktake', can('adjust'), ep.startswith('inventory.stocktake'), '', '🔢'),
     ('inventory.transfers', 'Transfers', can('adjust') and g.branches|length > 1, ep.startswith('inventory.transfer'), '', '🚚'),
+    ('inventory.batches', 'Stock batches (FIFO)', can('inventory'), ep.startswith('inventory.batch'), '', '🗂️'),
     ('inventory.movements', 'Stock movements', can('inventory'), ep == 'inventory.movements', '', '🔁'),
   ]),
   ('Money & reports', 'money', [
@@ -105,7 +106,7 @@ applyShut();
 {% if g.user %}
 {% set topic = 'pos' if ep == 'sales.pos' else 'sales' if ep.startswith('sales.') else 'customers' if 'customer' in ep
    else 'suppliers' if 'supplier' in ep else 'purchases' if ep.startswith('purchases.') else 'products' if ep.startswith('products.')
-   else 'adjust' if ep == 'inventory.adjust' else 'stocktake' if ep.startswith('inventory.stocktake') else 'transfers' if ep.startswith('inventory.transfer') else 'inventory' if ep.startswith('inventory.')
+   else 'adjust' if ep == 'inventory.adjust' else 'stocktake' if ep.startswith('inventory.stocktake') else 'transfers' if ep.startswith('inventory.transfer') else 'batches' if ep.startswith('inventory.batch') else 'inventory' if ep.startswith('inventory.')
    else 'expenses' if ep.startswith('expenses.') else 'reports' if ep.startswith('reports.') else 'admin' if ep.startswith('admin.')
    else 'dashboard' if ep.startswith('dash.') else 'start' %}
 <dialog id="help" aria-label="Help">

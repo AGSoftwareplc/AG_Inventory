@@ -5,6 +5,7 @@ from flask import Blueprint, flash, g, redirect, render_template, request, url_f
 
 from core import RuleError, audit, branch_id, claim_once, fail, get_db, parse_money, parse_qty, requires, tx
 import core
+import rules
 from rules import move_stock
 
 bp = Blueprint('products', __name__, url_prefix='/products')
@@ -178,7 +179,8 @@ def view(pid):
     prices = db.execute('SELECT pc.*, u.username FROM price_changes pc LEFT JOIN users u '
                         'ON u.id=pc.user_id WHERE product_id=? ORDER BY pc.id DESC LIMIT 20',
                         (pid,)).fetchall()
-    return render_template('products/view.html', p=p, moves=moves, prices=prices)
+    batches = rules.open_batches(db, pid, branch_id())
+    return render_template('products/view.html', p=p, moves=moves, prices=prices, batches=batches)
 
 
 @bp.route('/<int:pid>/delete', methods=['POST'])

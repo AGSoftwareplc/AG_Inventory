@@ -10,4 +10,6 @@
 {% for p in hist %}<tr><td><a href="{{ url_for('purchases.view', pur_id=p.id) }}">{{ p.ref_no }}</a></td><td>{{ p.date }}</td><td>{{ p.status }}</td><td class="n">{{ p.total|money }}</td><td class="n">{{ p.paid|money }}</td>
 <td class="n">{{ (p.total-p.returned_value-p.paid)|money if p.status not in ('Draft','Cancelled') }}</td></tr>
 {% else %}<tr><td colspan="6" class="muted">No purchases yet.</td></tr>{% endfor %}</table></div>
+{% if pays %}<h2>Payments made</h2><div class="card tablewrap" style="padding:0"><table><tr><th>Date</th><th>Purchase</th><th>Method</th><th>TT No. / reference</th><th class="n">Amount</th><th>By</th></tr>
+{% for p in pays %}<tr><td>{{ p.date }}</td><td><a href="{{ url_for('purchases.view', pur_id=p.purchase_id) }}">{{ p.ref_no }}</a></td><td>{{ p.method }}</td><td>{{ p.reference }}</td><td class="n">{{ p.amount|money }}</td><td>{{ p.username }}</td></tr>{% endfor %}</table></div>{% endif %}
 {% endblock %}

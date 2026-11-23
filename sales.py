@@ -13,7 +13,7 @@ bp = Blueprint('sales', __name__, url_prefix='/sales')
 def pos():
     customers = get_db().execute('SELECT id, name, phone FROM customers ORDER BY name').fetchall()
     return render_template('sales/pos.html', customers=customers, methods=payment_methods(),
-                           allow_discount=can('discount'))
+                           allow_discount=can('discount'), allow_credit=can('credit'))
 
 
 @bp.route('/api/products')
@@ -62,7 +62,8 @@ def checkout():
             claim_once(db)
             sid = rules.create_sale(db, lines, discount, tendered, f.get('method') or 'Cash',
                                     f.get('customer_id', type=int), g.user['id'], today(),
-                                    allow_discount=can('discount'))
+                                    allow_discount=can('discount'), allow_credit=can('credit'),
+                                    reference=f.get('reference', ''))
         return redirect(url_for('sales.receipt', sid=sid, new=1))
     except (RuleError, ValueError, TypeError) as e:
         flash(str(e) if isinstance(e, RuleError) else 'The cart could not be read. Please try again.',
@@ -72,7 +73,8 @@ def checkout():
 
 def _sale(sid):
     db = get_db()
-    s = db.execute('SELECT s.*, c.name AS customer, c.phone AS cphone, u.full_name AS cashier FROM '
+    s = db.execute('SELECT s.*, c.name AS customer, c.phone AS cphone, u.full_name AS cashier, (SELECT '
+                   "group_concat(reference, ', ') FROM sale_payments sp WHERE sp.sale_id=s.id AND reference<>'') AS refs FROM "
                    'sales s LEFT JOIN customers c ON c.id=s.customer_id LEFT JOIN users u ON '
                    'u.id=s.user_id WHERE s.id=?', (sid,)).fetchone()
     items = db.execute('SELECT i.*, p.name, p.code, p.unit FROM sale_items i JOIN products p ON '
@@ -100,17 +102,24 @@ def index():
     args = [branch_id(), start, end]
     if status == 'credit':
         sql += " AND s.status='Completed' AND s.total-s.refunded-s.paid>0"
+    elif status == 'paid':
+        sql += " AND s.status='Completed' AND s.total-s.refunded-s.paid<=0"
+    elif status == 'partial':
+        sql += " AND s.status='Completed' AND s.total-s.refunded-s.paid>0 AND s.paid>0"
+    elif status == 'unpaid':
+        sql += " AND s.status='Completed' AND s.total-s.refunded-s.paid>0 AND s.paid<=0"
     elif status:
         sql += ' AND s.status=?'
         args.append(status)
     if q:
-        sql += ' AND (s.receipt_no LIKE ? OR c.name LIKE ? OR c.phone LIKE ?)'
-        args += [f'%{q}%'] * 3
+        sql += (' AND (s.receipt_no LIKE ? OR c.name LIKE ? OR c.phone LIKE ? OR EXISTS (SELECT 1 FROM '
+                'sale_payments sp WHERE sp.sale_id=s.id AND sp.reference LIKE ?))')
+        args += [f'%{q}%'] * 4
     rows = get_db().execute(sql + ' ORDER BY s.id DESC LIMIT 2000', args).fetchall()
     done = [r for r in rows if r['status'] == 'Completed']
     totals = {'n': len(done), 'total': sum(r['total'] - r['refunded'] for r in done)}
     return render_template('sales/index.html', rows=rows, start=start, end=end, status=status, q=q,
-                           totals=totals)
+                           totals=totals, pay_status=rules.payment_status)
 
 
 @bp.route('/<int:sid>')
@@ -125,8 +134,13 @@ def view(sid):
     rets = db.execute("SELECT r.*, p.name, u.username FROM returns r JOIN products p ON p.id=r.product_id "
                       "LEFT JOIN users u ON u.id=r.user_id WHERE kind='sale' AND doc_id=? ORDER BY r.id",
                       (sid,)).fetchall()
-    return render_template('sales/view.html', s=s, items=items, pays=pays, rets=rets,
-                           balance=rules.sale_balance(s), methods=payment_methods(), today=today())
+    batches = db.execute("SELECT m.product_id, bm.batch_id, -bm.qty AS qty, bm.unit_cost, bm.back_qty, b.received, "
+                         "b.expiry, b.ref_no FROM stock_moves m JOIN batch_moves bm ON bm.move_id=m.id JOIN stock_batches b "
+                         "ON b.id=bm.batch_id WHERE m.ref_type='sale' AND m.ref_id=? AND m.move_type='sale' ORDER BY bm.id",
+                         (sid,)).fetchall()
+    return render_template('sales/view.html', s=s, items=items, pays=pays, rets=rets, batches=batches,
+                           balance=rules.sale_balance(s), methods=payment_methods(), today=today(),
+                           pay_status=rules.payment_status(s['total'] - s['refunded'], s['paid']))
 
 
 def _act(sid, fn, ok):
@@ -170,4 +184,5 @@ def pay(sid):
     except RuleError as e:
         return fail(e, 'sales.view', sid=sid)
     return _act(sid, lambda db: rules.pay_sale(db, sid, amount, request.form.get('method', 'Cash'),
-                                               today(), g.user['id']), 'Payment recorded.')
+                                               request.form.get('date') or today(), g.user['id'],
+                                               request.form.get('reference', '')), 'Payment recorded.')

@@ -81,9 +81,9 @@ class ShopTest(unittest.TestCase):
         return self.post(f"/purchases/{pur['id']}/receive",
                          {f"r_{i['id']}": str(i['qty'] - i['received_qty']) for i in items})
 
-    def sell(self, items, tendered='', discount='', customer='', dtype='amt', once=None):
+    def sell(self, items, tendered='', discount='', customer='', dtype='amt', once=None, reference=''):
         data = {'items': ','.join(f'{p}:{q}' for p, q in items), 'tendered': tendered, 'discount': discount,
-                'discount_type': dtype, 'method': 'Cash', 'customer_id': customer}
+                'discount_type': dtype, 'method': 'Cash', 'customer_id': customer, 'reference': reference}
         if once:
             data['once'] = once
         return self.post('/sales/pos', data)
@@ -165,7 +165,8 @@ class ShopTest(unittest.TestCase):
         self.assertEqual((s['subtotal'], s['discount'], s['total'], s['paid'], s['change_due']),
                          (45000, 3000, 42000, 42000, 8000))
         self.assertEqual(self.stock(p['id'])['stock'], 17)
-        self.assertEqual(self.one('SELECT cost FROM sale_items WHERE sale_id=?', s['id'])['cost'], 11000)
+        # FIFO: the 3 come from the first delivery (10 at 100), not the average of 110
+        self.assertEqual(self.one('SELECT cost FROM sale_items WHERE sale_id=?', s['id'])['cost'], 10000)
         receipt = self.c.get(f"/sales/{s['id']}/receipt").data
         self.assertIn(b'420.00', receipt)
         self.assertIn(b'80.00', receipt)
@@ -216,9 +217,9 @@ class ShopTest(unittest.TestCase):
         pr = rules.profit(con, '2000-01-01', '2100-01-01')
         con.close()
         self.assertEqual(pr['net_sales'], 28000)
-        self.assertEqual(pr['cogs'], 22000)
-        self.assertEqual(pr['gross_profit'], 6000)
-        self.assertEqual(pr['net_profit'], 4000)
+        self.assertEqual(pr['cogs'], 20000)  # FIFO: 2 kept from the first delivery at 100
+        self.assertEqual(pr['gross_profit'], 8000)
+        self.assertEqual(pr['net_profit'], 6000)
         # a sale with returns cannot be cancelled
         self.post(f"/sales/{sale['id']}/cancel", {'reason': 'x'})
         self.assertEqual(self.one('SELECT status FROM sales')['status'], 'Completed')
@@ -516,14 +517,14 @@ class ShopTest(unittest.TestCase):
         self.assertEqual(bstock(1)['stock'], 15)
         self.assertIsNone(bstock(bole))
         item = self.one('SELECT * FROM transfer_items')
-        self.assertAlmostEqual(item['unit_cost'], 11000)
+        self.assertAlmostEqual(item['unit_cost'], 10000)  # FIFO: the oldest batch leaves first
         self.post(f"/inventory/transfers/{t['id']}", {'receive': '1', f"r_{item['id']}": '5'}, once=False)
         self.assertEqual(self.one('SELECT status FROM transfers')['status'], 'In transit')  # only Bole can receive
         self.post('/branch', {'branch': str(bole)}, once=False)
         self.post(f"/inventory/transfers/{t['id']}", {'receive': '1', f"r_{item['id']}": '4'}, once=False)
         self.assertEqual(self.one('SELECT status FROM transfers')['status'], 'Received')
         self.assertEqual(bstock(bole)['stock'], 4)  # one lost in transit
-        self.assertAlmostEqual(bstock(bole)['avg_cost'], 11000)  # same cost as at Main
+        self.assertAlmostEqual(bstock(bole)['avg_cost'], 10000)  # same batch cost as at Main
         self.assertEqual(self.stock(p['id'])['stock'], 19)  # business total
         # a sale at Bole takes stock from Bole only, numbered with the branch code
         self.sell([(p['id'], 2)], tendered='300')
@@ -682,6 +683,193 @@ class ShopTest(unittest.TestCase):
         self.assertNotIn('Users, settings', side)
         self.assertNotIn('>⚙ Admin</a>', html)
         self.assertNotIn('Adjust stock', side)
+
+    # ---------------------------------------------------------------- AC-019, AC-020: FIFO batches
+    def batches(self, pid, branch=1):
+        con = self.db()
+        rows = con.execute('SELECT * FROM stock_batches WHERE product_id=? AND branch_id=? ORDER BY id',
+                           (pid, branch)).fetchall()
+        con.close()
+        return rows
+
+    def test_fifo_sale_takes_oldest_batches_and_costs_them(self):
+        p = self.stocked_product()  # batch 1: 10 at 100, batch 2: 10 at 120
+        b1, b2 = self.batches(p['id'])
+        self.assertEqual((b1['remaining'], b1['unit_cost'], b2['remaining'], b2['unit_cost']), (10, 10000, 10, 12000))
+        self.assertIsNotNone(b1['purchase_item_id'])
+        self.sell([(p['id'], 15)], tendered='2250')
+        sale = self.one('SELECT * FROM sales')
+        item = self.one('SELECT * FROM sale_items')
+        self.assertAlmostEqual(item['cost'], (10 * 10000 + 5 * 12000) / 15)  # 10 from the first, 5 from the second
+        b1, b2 = self.batches(p['id'])
+        self.assertEqual((b1['remaining'], b2['remaining']), (0, 5))
+        self.assertEqual(self.stock(p['id'])['avg_cost'], 12000)  # only the 120 batch is left
+        # cost of goods sold by batch report shows both batches
+        html = self.c.get('/reports/?r=batch_cogs&start=2000-01-01&end=2100-01-01').data.decode()
+        self.assertIn('1,000.00', html)  # 10 x 100 from the first batch
+        self.assertIn('600.00', html)  # 5 x 120 from the second
+        # a return goes back into the batch the goods came from last (120), at that cost
+        self.post(f"/sales/{sale['id']}/return", {'item_id': item['id'], 'qty': '3', 'reason': 'faulty'})
+        b1, b2 = self.batches(p['id'])
+        self.assertEqual((b1['remaining'], b2['remaining']), (0, 8))
+        self.assertEqual(self.one("SELECT cost FROM returns WHERE kind='sale'")['cost'], 12000)
+        con = self.db()
+        import rules
+        pr = rules.profit(con, '2000-01-01', '2100-01-01')
+        con.close()
+        self.assertEqual(pr['cogs'], 10 * 10000 + 2 * 12000)  # 12 kept: 10 at 100 + 2 at 120
+        # cancelling puts the rest back into the very same batches
+        self.sell([(p['id'], 4)], tendered='600')
+        s2 = self.one('SELECT id FROM sales ORDER BY id DESC')['id']
+        self.post(f'/sales/{s2}/cancel', {'reason': 'mistake'})
+        self.assertEqual([b['remaining'] for b in self.batches(p['id'])], [0, 8])
+        self.assertEqual(len(self.batches(p['id'])), 2)  # no extra batch was made
+        for url in (f"/sales/{sale['id']}", '/inventory/batches', f"/inventory/batches/{b2['id']}",
+                    f"/products/{p['id']}", '/inventory/batches?show=all'):
+            self.assertEqual(self.c.get(url).status_code, 200, url)
+
+    def test_expiring_batch_is_sold_first(self):
+        p = self.product()
+        pur = self.purchase(p['id'], '10', '100')
+        self.receive_all(pur)  # no expiry date
+        pur2 = self.purchase(p['id'], '10', '120')
+        item = self.one('SELECT id FROM purchase_items WHERE purchase_id=?', pur2['id'])
+        self.post(f"/purchases/{pur2['id']}/receive", {f"r_{item['id']}": '10', f"x_{item['id']}": '2026-12-31'})
+        b1, b2 = self.batches(p['id'])
+        self.assertEqual(b2['expiry'], '2026-12-31')
+        self.sell([(p['id'], 4)], tendered='600')
+        b1, b2 = self.batches(p['id'])
+        self.assertEqual((b1['remaining'], b2['remaining']), (10, 6))  # the batch with an expiry date went first
+        self.assertEqual(self.one('SELECT cost FROM sale_items')['cost'], 12000)
+        # an expiry date can be set on a batch later
+        self.post(f"/inventory/batches/{b1['id']}", {'expiry': '2026-12-01'}, once=False)
+        self.sell([(p['id'], 1)], tendered='150')
+        self.assertEqual(self.batches(p['id'])[0]['remaining'], 9)
+        r = self.c.get('/inventory/batches?show=expiring&days=36500').data.decode()
+        self.assertIn('2026-12-01', r)
+
+    def test_purchase_return_comes_out_of_its_own_batch(self):
+        p = self.stocked_product()
+        first = self.one('SELECT * FROM purchases ORDER BY id LIMIT 1')
+        last = self.one('SELECT * FROM purchases ORDER BY id DESC LIMIT 1')
+        self.sell([(p['id'], 10)], tendered='1500')  # the whole first delivery is sold
+        it1 = self.one('SELECT id FROM purchase_items WHERE purchase_id=?', first['id'])['id']
+        r = self.post(f"/purchases/{first['id']}/return", {'item_id': it1, 'qty': '1', 'reason': 'late claim'},
+                      follow_redirects=True)
+        self.assertIn(b'of this batch is still in stock', r.data)
+        self.assertEqual(self.stock(p['id'])['stock'], 10)
+        it2 = self.one('SELECT id FROM purchase_items WHERE purchase_id=?', last['id'])['id']
+        self.post(f"/purchases/{last['id']}/return", {'item_id': it2, 'qty': '2', 'reason': 'damaged'})
+        self.assertEqual([b['remaining'] for b in self.batches(p['id'])], [0, 8])
+        self.assertIn(b'Stock batches from this purchase', self.c.get(f"/purchases/{last['id']}").data)
+
+    def test_adjust_a_chosen_batch(self):
+        p = self.stocked_product()
+        b1, b2 = self.batches(p['id'])
+        self.post('/inventory/adjust', {'product_id': p['id'], 'kind': 'expired', 'qty': '3', 'reason': 'expired',
+                                        'batch_id': b2['id']}, once=False)
+        self.assertEqual([b['remaining'] for b in self.batches(p['id'])], [10, 7])
+        r = self.post('/inventory/adjust', {'product_id': p['id'], 'kind': 'damaged', 'qty': '8', 'reason': 'x',
+                                            'batch_id': b2['id']}, once=False)
+        self.assertIn(b'of this batch is still in stock', r.data)
+        self.post('/inventory/adjust', {'product_id': p['id'], 'kind': 'lost', 'qty': '2', 'reason': 'missing'},
+                  once=False)  # no batch chosen: FIFO
+        self.assertEqual([b['remaining'] for b in self.batches(p['id'])], [8, 7])
+        self.assertEqual(self.c.get(f"/inventory/api/batches?pid={p['id']}").get_json()[0]['id'], b1['id'])
+
+    def test_transfer_keeps_batches(self):
+        p = self.stocked_product()
+        self.post('/admin/branches/new', {'code': 'BOLE', 'name': 'Bole shop', 'active': '1'}, once=False)
+        bole = self.one("SELECT id FROM branches WHERE code='BOLE'")['id']
+        self.post('/inventory/transfers/new', {'to_branch': str(bole), 'pid': [str(p['id'])], 'qty': ['12']})
+        t = self.one('SELECT id FROM transfers')['id']
+        item = self.one('SELECT * FROM transfer_items')
+        self.assertAlmostEqual(item['unit_cost'], (10 * 10000 + 2 * 12000) / 12)
+        self.post('/branch', {'branch': str(bole)}, once=False)
+        self.post(f'/inventory/transfers/{t}', {'receive': '1', f"r_{item['id']}": '12'}, once=False)
+        bb = self.batches(p['id'], bole)
+        self.assertEqual([(b['remaining'], b['unit_cost']) for b in bb], [(10, 10000), (2, 12000)])
+        self.assertEqual(bb[0]['received'], self.batches(p['id'])[0]['received'])
+
+    def test_existing_stock_becomes_opening_batches_with_backup(self):
+        p = self.product(code='OLD', cost='10', opening='7')
+        con = core.connect(self.app.config['DATABASE'])
+        con.execute('DELETE FROM batch_moves')
+        con.execute('DELETE FROM stock_batches')  # as before FIFO batches
+        con.execute("DELETE FROM settings WHERE key='batches_ready'")
+        con.close()
+        bdir = os.path.join(self.tmp, 'upgrade-backups')
+        core.init_db(self.app.config['DATABASE'], backup_dir=bdir)
+        b = self.batches(p['id'])
+        self.assertEqual([(x['source'], x['remaining'], x['unit_cost']) for x in b], [('opening', 7, 1000)])
+        self.assertTrue(any('before-batches' in f for f in os.listdir(bdir)))
+        core.init_db(self.app.config['DATABASE'], backup_dir=bdir)  # only once
+        self.assertEqual(len(self.batches(p['id'])), 1)
+        self.sell([(p['id'], 2)], tendered='300')
+        self.assertEqual(self.batches(p['id'])[0]['remaining'], 5)
+
+    # ---------------------------------------------------------------- AC-029, AC-026: payments
+    def test_unpaid_and_partial_sales_with_payment_history(self):
+        p = self.stocked_product()
+        self.post('/customers/new', {'name': 'Almaz', 'phone': '0922'}, once=False)
+        cid = self.one('SELECT id FROM customers')['id']
+        self.sell([(p['id'], 2)], tendered='0', customer=cid)  # nothing paid now
+        s = self.one('SELECT * FROM sales')
+        self.assertEqual((s['total'], s['paid']), (30000, 0))
+        self.assertEqual(self.stock(p['id'])['stock'], 18)  # stock leaves on confirmation even if unpaid
+        self.assertIn(b'Unpaid', self.c.get(f"/sales/{s['id']}").data)
+        self.post(f"/sales/{s['id']}/pay", {'amount': '100', 'method': 'Mobile banking', 'reference': 'TT12345'})
+        self.post(f"/sales/{s['id']}/pay", {'amount': '500', 'method': 'Cash'})  # more than owed: refused
+        s = self.one('SELECT * FROM sales')
+        self.assertEqual(s['paid'], 10000)
+        self.assertEqual(self.stock(p['id'])['stock'], 18)  # payments never touch stock
+        self.assertEqual(self.one('SELECT COUNT(*) n FROM sales')['n'], 1)
+        pay = self.one('SELECT * FROM sale_payments')
+        self.assertEqual((pay['reference'], pay['method'], pay['amount']), ('TT12345', 'Mobile banking', 10000))
+        html = self.c.get(f"/sales/{s['id']}").data.decode()
+        self.assertIn('Partially paid', html)
+        self.assertIn('TT12345', html)
+        # find the sale by its TT number, and by payment status
+        self.assertIn(s['receipt_no'], self.c.get('/sales/?q=TT123&start=2000-01-01&end=2100-01-01').data.decode())
+        self.assertIn(s['receipt_no'], self.c.get('/sales/?status=partial&start=2000-01-01&end=2100-01-01').data.decode())
+        self.assertNotIn(s['receipt_no'], self.c.get('/sales/?status=unpaid&start=2000-01-01&end=2100-01-01').data.decode())
+        bal = self.c.get('/reports/?r=customer_balances').data.decode()
+        self.assertIn('Almaz', bal)
+        self.assertIn('200.00', bal)
+        self.assertIn('TT12345', self.c.get('/reports/?r=customer_payments&start=2000-01-01&end=2100-01-01').data.decode())
+        self.assertIn('TT12345', self.c.get(f'/customers/{cid}').data.decode())
+        self.post(f"/sales/{s['id']}/pay", {'amount': '200', 'method': 'Bank transfer', 'reference': 'FT99'})
+        self.assertIn('Paid', self.c.get('/sales/?status=paid&start=2000-01-01&end=2100-01-01').data.decode())
+        self.assertEqual(self.one('SELECT paid FROM sales')['paid'], 30000)
+
+    def test_credit_sales_need_permission(self):
+        p = self.stocked_product()
+        self.post('/customers/new', {'name': 'Almaz', 'phone': '0922'}, once=False)
+        cid = self.one('SELECT id FROM customers')['id']
+        con = self.db()
+        con.execute("DELETE FROM role_permissions WHERE role='Sales Attendant' AND perm='credit'")
+        con.close()
+        self.login('cashier', 'cashier123')
+        r = self.sell([(p['id'], 1)], tendered='50', customer=cid)
+        self.assertIsNone(self.one('SELECT * FROM sales'))
+        self.sell([(p['id'], 1)], tendered='150', reference='TT777')  # full payment is fine, with a TT number
+        self.assertEqual(self.one('SELECT reference FROM sale_payments')['reference'], 'TT777')
+        self.assertIn(b'TT777', self.c.get(f"/sales/{self.one('SELECT id FROM sales')['id']}/receipt").data)
+
+    def test_supplier_partial_payments_with_reference(self):
+        p = self.product()
+        pur = self.purchase(p['id'], '10', '100')
+        self.receive_all(pur)
+        self.post(f"/purchases/{pur['id']}/pay", {'amount': '400', 'method': 'Bank transfer', 'reference': 'FT-1'})
+        self.post(f"/purchases/{pur['id']}/pay", {'amount': '100', 'method': 'Cash'})
+        self.assertEqual(self.one('SELECT paid FROM purchases')['paid'], 50000)
+        self.assertIn('Partially paid', self.c.get(f"/purchases/{pur['id']}").data.decode())
+        self.assertIn('FT-1', self.c.get('/reports/?r=supplier_payments&start=2000-01-01&end=2100-01-01').data.decode())
+        bal = self.c.get('/reports/?r=supplier_balances').data.decode()
+        self.assertIn('ABC Wholesale', bal)
+        self.assertIn('500.00', bal)
+        sup = self.one('SELECT supplier_id FROM purchases')['supplier_id']
+        self.assertIn('FT-1', self.c.get(f'/suppliers/{sup}').data.decode())
 
     @staticmethod
     def _today():

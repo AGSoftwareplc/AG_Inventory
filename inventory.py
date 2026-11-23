@@ -1,7 +1,10 @@
 """Stock levels, adjustments, movement history and stocktaking."""
-from flask import Blueprint, flash, g, redirect, render_template, request, url_for
+from datetime import date, timedelta
 
-from core import RuleError, branch_id, claim_once, date_range, fail, get_db, parse_qty, products_select, requires, today, tx
+from flask import Blueprint, flash, g, jsonify, redirect, render_template, request, url_for
+
+from core import (RuleError, branch_id, can, claim_once, date_range, fail, get_db, parse_qty, products_select, requires,
+                  today, tx)
 import rules
 
 bp = Blueprint('inventory', __name__, url_prefix='/inventory')
@@ -42,7 +45,8 @@ def adjust():
             qty = parse_qty(request.form.get('qty'), allow_negative=(kind == 'correction'))
             with tx() as db:
                 rules.adjust_stock(db, int(request.form['product_id']), kind, qty,
-                                   request.form.get('reason', ''), g.user['id'])
+                                   request.form.get('reason', ''), g.user['id'],
+                                   request.form.get('batch_id', type=int))
             flash('Stock adjusted.', 'ok')
             return redirect(url_for('inventory.adjust'))
         except (RuleError, ValueError, KeyError) as e:
@@ -74,6 +78,65 @@ def movements():
     rows = get_db().execute(sql + ' ORDER BY m.id DESC LIMIT 2000', args).fetchall()
     return render_template('inventory/movements.html', rows=rows, start=start, end=end, mtype=mtype,
                            labels=rules.MOVE_LABELS)
+
+
+# ---------------------------------------------------------------- FIFO batches
+@bp.route('/api/batches')
+@requires('inventory', 'adjust')
+def api_batches():
+    """Open batches of one product in this branch, in the order they will be used (FIFO)."""
+    pid = request.args.get('pid', type=int)
+    rows = rules.open_batches(get_db(), pid, branch_id()) if pid else []
+    return jsonify([{'id': b['id'], 'ref_no': b['ref_no'], 'received': b['received'], 'expiry': b['expiry'] or '',
+                     'remaining': b['remaining']} for b in rows])
+
+
+@bp.route('/batches')
+@requires('inventory')
+def batches():
+    """Stock batches of this branch: what is in stock, from which delivery, at what cost, expiring when."""
+    q = request.args.get('q', '').strip()
+    show = request.args.get('show', 'open')
+    days = request.args.get('days', type=int) or 30
+    sql = ('SELECT b.*, p.code, p.name, p.unit FROM stock_batches b JOIN products p ON p.id=b.product_id '
+           'WHERE b.branch_id=?')
+    args = [branch_id()]
+    if show != 'all':
+        sql += ' AND b.remaining>0.0005'
+    if show == 'expiring':
+        sql += " AND b.expiry IS NOT NULL AND b.expiry<>'' AND b.expiry<=?"
+        args.append((date.today() + timedelta(days=days)).isoformat())
+    if q:
+        sql += ' AND (p.name LIKE ? OR p.code LIKE ? OR b.ref_no LIKE ?)'
+        args += [f'%{q}%', f'%{q}%', f'%{q}%']
+    sql += (" ORDER BY p.name, CASE WHEN b.expiry IS NULL OR b.expiry='' THEN 1 ELSE 0 END, b.expiry, "
+            "b.received, b.id LIMIT 3000")
+    rows = get_db().execute(sql, args).fetchall()
+    return render_template('inventory/batches.html', rows=rows, q=q, show=show, days=days, today=today())
+
+
+@bp.route('/batches/<int:bid>', methods=['GET', 'POST'])
+@requires('inventory')
+def batch(bid):
+    db = get_db()
+    b = db.execute('SELECT b.*, p.code, p.name, p.unit FROM stock_batches b JOIN products p ON p.id=b.product_id '
+                   'WHERE b.id=? AND b.branch_id=?', (bid, branch_id())).fetchone()
+    if not b:
+        return fail('Batch not found in this branch.', 'inventory.batches')
+    if request.method == 'POST':
+        if not can('adjust'):
+            return fail('Your role cannot change batches.', 'inventory.batch', bid=bid)
+        try:
+            with tx() as db:
+                rules.set_batch_expiry(db, bid, request.form.get('expiry', '').strip())
+            flash('Expiry date saved.', 'ok')
+        except RuleError as e:
+            flash(str(e), 'error')
+        return redirect(url_for('inventory.batch', bid=bid))
+    moves = db.execute('SELECT bm.*, m.at, m.move_type, m.ref_no, m.ref_type, m.ref_id, m.reason, u.username '
+                       'FROM batch_moves bm JOIN stock_moves m ON m.id=bm.move_id LEFT JOIN users u ON u.id=m.user_id '
+                       'WHERE bm.batch_id=? ORDER BY bm.id', (bid,)).fetchall()
+    return render_template('inventory/batch.html', b=b, moves=moves, labels=rules.MOVE_LABELS)
 
 
 # ---------------------------------------------------------------- stocktake

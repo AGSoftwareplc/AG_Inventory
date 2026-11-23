@@ -122,6 +122,11 @@
     if (!cart.length) { e.preventDefault(); alert('The cart is empty.'); return; }
     var grand = totals();
     if ($('tendered').value === '') $('tendered').value = (grand / 100).toFixed(2);
+    if (Math.round(num($('tendered').value) * 100) < grand && !$('credit_ok').value) {
+      e.preventDefault();
+      alert('You are not allowed to sell on credit. The full amount must be paid.');
+      return;
+    }
     if (Math.round(num($('tendered').value) * 100) < grand && !$('cust').value) {
       e.preventDefault();
       alert('Amount paid is less than the total. Choose a registered customer to sell on credit.');

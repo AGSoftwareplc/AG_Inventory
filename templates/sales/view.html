@@ -1,12 +1,13 @@
 {% extends 'base.html' %}{% block title %}Sale {{ s.receipt_no }}{% endblock %}
 {% block content %}
 {% set done = s.status == 'Completed' %}
-<div class="head"><h1>Sale {{ s.receipt_no }} <span class="badge {{ 'ok' if done else 'err' }}">{{ s.status }}</span></h1>
+<div class="head"><h1>Sale {{ s.receipt_no }} <span class="badge {{ 'ok' if done else 'err' }}">{{ s.status }}</span>
+{% if done %} <span class="badge {{ 'ok' if pay_status == 'Paid' else ('warn' if pay_status == 'Partially paid' else 'err') }}">{{ pay_status }}</span>{% endif %}</h1>
 <div><a class="btn light" href="{{ url_for('sales.receipt', sid=s.id) }}">Receipt</a> <a class="btn light" href="{{ url_for('sales.index') }}">All sales</a></div></div>
 <div class="card grid">
   <div><label>Date</label>{{ s.created_at }}</div><div><label>Sold by</label>{{ s.cashier }}</div>
   <div><label>Customer</label>{% if s.customer_id %}<a href="{{ url_for('contacts.customer', rid=s.customer_id) }}">{{ s.customer }}</a>{% else %}Walk-in{% endif %}</div>
-  <div><label>Payment</label>{{ s.method }}</div>
+  <div><label>Payment</label>{{ s.method }}{% if s.refs %} · TT No. {{ s.refs }}{% endif %}</div>
   {% if s.cancel_reason %}<div class="wide"><label>Cancel reason</label>{{ s.cancel_reason }}</div>{% endif %}
 </div>
 <div class="card tablewrap" style="padding:0"><table>
@@ -23,8 +24,10 @@
 {% if done %}<div class="row">
 {% if balance > 0 and can('payments') %}
 <form method="post" class="card" action="{{ url_for('sales.pay', sid=s.id) }}">{{ csrf() }}{{ once() }}<h2 style="margin-top:0">Receive payment</h2>
-<div class="grid"><div><label>Amount</label><input name="amount" inputmode="decimal" value="{{ balance|money_input }}" required></div>
-<div><label>Method</label><select name="method">{% for m in methods %}<option>{{ m }}</option>{% endfor %}</select></div></div>
+<div class="grid"><div><label>Amount <span class="muted">(part payment is fine)</span></label><input name="amount" inputmode="decimal" value="{{ balance|money_input }}" required></div>
+<div><label>Method</label><select name="method">{% for m in methods %}<option>{{ m }}</option>{% endfor %}</select></div>
+<div><label>TT No. / reference</label><input name="reference" maxlength="60"></div>
+<div><label>Date</label><input type="date" name="date" value="{{ today }}"></div></div>
 <div class="actions"><button>Save payment</button></div></form>{% endif %}
 {% if can('returns') %}
 <form method="post" class="card" action="{{ url_for('sales.ret', sid=s.id) }}">{{ csrf() }}{{ once() }}<h2 style="margin-top:0">Customer return</h2>
@@ -35,8 +38,12 @@
 <form method="post" class="card" action="{{ url_for('sales.cancel', sid=s.id) }}" onsubmit="return confirm('Cancel this whole sale and put all items back in stock?')">{{ csrf() }}{{ once() }}<h2 style="margin-top:0">Cancel sale</h2>
 <label>Reason *</label><input name="reason" required><div class="actions"><button class="danger">Cancel sale</button></div></form>{% endif %}
 </div>{% endif %}
-{% if pays %}<h2>Payments</h2><div class="card tablewrap" style="padding:0"><table><tr><th>Date</th><th>Method</th><th class="n">Amount</th><th>By</th></tr>
-{% for p in pays %}<tr><td>{{ p.date }}</td><td>{{ p.method }}</td><td class="n">{{ p.amount|money }}</td><td>{{ p.username }}</td></tr>{% endfor %}</table></div>{% endif %}
+<h2>Payment history</h2><div class="card tablewrap" style="padding:0"><table><tr><th>Date</th><th>Method</th><th>TT No. / reference</th><th class="n">Amount</th><th>Received by</th></tr>
+{% for p in pays %}<tr><td>{{ p.date }}</td><td>{{ p.method }}</td><td>{{ p.reference }}</td><td class="n">{{ p.amount|money }}</td><td>{{ p.username }}</td></tr>
+{% else %}<tr><td colspan="5" class="muted">No payment yet (unpaid sale).</td></tr>{% endfor %}</table></div>
+{% if batches and can('reports') %}<h2>Stock batches used (FIFO cost)</h2><div class="card tablewrap" style="padding:0"><table><tr><th>Product</th><th>Batch</th><th>Received</th><th>Expiry</th><th class="n">Qty</th><th class="n">Unit cost</th><th class="n">Cost</th><th class="n">Came back</th></tr>
+{% set names = {} %}{% for i in items %}{% set _ = names.update({i.product_id: i.name}) %}{% endfor %}
+{% for b in batches %}<tr><td>{{ names.get(b.product_id, '') }}</td><td><a href="{{ url_for('inventory.batch', bid=b.batch_id) }}">#{{ b.batch_id }}</a> <span class="muted">{{ b.ref_no }}</span></td><td>{{ b.received }}</td><td>{{ b.expiry or '' }}</td><td class="n">{{ b.qty|qty }}</td><td class="n">{{ b.unit_cost|money }}</td><td class="n">{{ (b.qty*b.unit_cost)|money }}</td><td class="n">{{ b.back_qty|qty if b.back_qty }}</td></tr>{% endfor %}</table></div>{% endif %}
 {% if rets %}<h2>Returns</h2><div class="card tablewrap" style="padding:0"><table><tr><th>Date</th><th>Product</th><th class="n">Qty</th><th class="n">Refund value</th><th>Reason</th><th>By</th></tr>
 {% for r in rets %}<tr><td>{{ r.date }}</td><td>{{ r.name }}</td><td class="n">{{ r.qty|qty }}</td><td class="n">{{ r.amount|money }}</td><td>{{ r.reason }}</td><td>{{ r.username }}</td></tr>{% endfor %}</table></div>{% endif %}
 {% endblock %}

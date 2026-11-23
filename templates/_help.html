@@ -26,9 +26,11 @@
   <li><b>Change a quantity:</b> type it in the <i>Qty</i> box. Decimals are allowed, for example 2.5 kg. To remove a line, click <b>×</b>.</li>
   <li><b>Discount</b> (only if your role allows it): enter an amount or a percentage (%).</li>
   <li><b>Amount paid:</b> enter the cash received and the change is shown. Leave it empty if the customer pays the exact total.</li>
+  <li><b>TT No. / payment reference:</b> for Telebirr, bank or mobile banking payments, type the transaction number. You can search sales by it later.</li>
   <li>Click <b>Complete sale</b>, then <b>Print receipt</b>.</li>
 </ol>
-<p><b>Credit sale</b> (customer pays later): choose a registered customer and enter the part they paid now. You take the rest later on the sale page.</p>
+<p><b>Credit sale</b> (customer pays later): choose a registered customer and enter the part they paid now, or <b>0</b> if they pay nothing now. The sale is then <i>Partially paid</i> or <i>Unpaid</i>. You take the rest later on the sale page. Only roles with the <i>Sell on credit</i> permission can do this.</p>
+<p>The goods leave stock as soon as the sale is completed, whether it is paid or not. The stock is taken from the batch that expires first, then from the oldest batch (FIFO).</p>
 <p>The POS sells from the stock of the branch shown in the top bar, and the receipt number starts with that branch's code.</p>
 <p>A red <i>"only X in stock"</i> label means there isn't enough stock. The sale can't be completed until you lower the quantity.</p>
 <p>Clicking <b>Complete sale</b> twice by mistake doesn't record the sale twice.</p>
@@ -37,9 +39,11 @@
 <section id="help-sales" data-title="Sales, returns & cancellations">
 <h2>Sales history, returns and cancellations</h2>
 <ul>
-  <li><b>Sales history</b> lists sales by date. Filter by <i>Unpaid / credit</i> to see customers who owe money. Click a receipt number to open it.</li>
-  <li><b>Receive a payment</b> (credit sale): open the sale, enter the amount and click <b>Save payment</b>.</li>
-  <li><b>Customer return:</b> open the sale, choose the item and quantity, and enter a reason. The items go back into stock. The refund is the item's price after its share of any discount. The screen tells you how much cash to give back.</li>
+  <li><b>Sales history</b> lists sales by date with their payment status: <i>Paid</i>, <i>Partially paid</i> or <i>Unpaid</i>. Use the <i>Status</i> box to show only one of them, or <i>Owing</i> for every sale with money still due. You can search by receipt number, customer or TT No. Click a receipt number to open it.</li>
+  <li><b>Receive a payment</b> (credit sale): open the sale, enter the amount (part payments are fine), the method, the TT No. if there is one and the date, then click <b>Save payment</b>. The balance owed goes down. A payment never creates a new sale or changes stock.</li>
+  <li><b>Payment history:</b> the sale page lists every payment with its date, method, TT No. and who received it.</li>
+  <li><b>Batches used:</b> users who can see profit also see which stock batches the sale used and their cost.</li>
+  <li><b>Customer return:</b> open the sale, choose the item and quantity, and enter a reason. The items go back into stock, into the same batch they came from. The refund is the item's price after its share of any discount. The screen tells you how much cash to give back.</li>
   <li><b>Cancel a sale</b> (managers only): open the sale, enter a reason and click <b>Cancel sale</b>. All items go back into stock. A sale that already has returns can't be cancelled.</li>
   <li><b>Reprint a receipt:</b> open the sale and click <b>Receipt</b>.</li>
 </ul>
@@ -48,7 +52,7 @@
 
 <section id="help-customers" data-title="Customers">
 <h2>Customers</h2>
-<p>Register customers who buy on credit or buy often. Each customer page shows their purchase history and how much they owe. You can use walk-in sales without registering anyone.</p>
+<p>Register customers who buy on credit or buy often. Each customer page shows their purchase history with the payment status of each sale, every payment they made (with TT No.) and how much they owe. You can use walk-in sales without registering anyone. The <i>Outstanding customer balances</i> report lists everyone who owes money.</p>
 </section>
 
 <section id="help-purchases" data-title="Purchases & receiving">
@@ -57,17 +61,17 @@
   <li><b>Purchases → New purchase:</b> choose the supplier and add product lines with the quantity and unit cost. Add the supplier's discount if there is one.
     <ul><li><b>Save as draft:</b> you can still change it, and stock isn't affected.</li>
         <li><b>Save and confirm order:</b> the order is final.</li></ul></li>
-  <li><b>When the goods arrive:</b> open the purchase, check the <i>Receive now</i> quantities and click <b>Receive into stock</b>. If only part arrived, enter what actually came. The rest can be received later, and the status shows <i>Partially Received</i>.</li>
-  <li><b>Pay the supplier:</b> on the same page, use <i>Record payment to supplier</i>. Partial payments are fine, and the balance owed is shown.</li>
-  <li><b>Return to supplier:</b> for damaged or wrong goods, choose the line and quantity and enter a reason. Stock and the amount owed both go down.</li>
+  <li><b>When the goods arrive:</b> open the purchase, check the <i>Receive now</i> quantities and click <b>Receive into stock</b>. If the goods have an expiry date, enter it in <i>Expiry date</i>. If only part arrived, enter what actually came. The rest can be received later, and the status shows <i>Partially Received</i>. Each line received becomes a <b>stock batch</b> with its own cost (see <i>Stock batches</i>).</li>
+  <li><b>Pay the supplier:</b> on the same page, use <i>Record payment to supplier</i>. Partial payments are fine: enter the amount, method, TT No. / reference and date. The balance owed and the payment status are shown.</li>
+  <li><b>Return to supplier:</b> for damaged or wrong goods, choose the line and quantity and enter a reason. The goods leave the batch that this purchase brought in, so stock and the amount owed both go down. If those goods were already sold, the return is refused.</li>
 </ol>
 <p><b>Cancel:</b> a purchase can be cancelled only before anything is received. After that, use a return.</p>
-<p><b>Cost:</b> the product cost is updated automatically as a weighted average. A purchase discount is spread over the lines.</p>
+<p><b>Cost:</b> each delivery keeps its own cost (FIFO). The average cost shown on a product is the value of its batches still in stock. A purchase discount is spread over the lines.</p>
 </section>
 
 <section id="help-suppliers" data-title="Suppliers">
 <h2>Suppliers</h2>
-<p>Add each supplier with a contact person and phone number. The supplier page shows all purchases and the total amount the shop still owes them. You can deactivate a supplier you no longer use.</p>
+<p>Add each supplier with a contact person and phone number. The supplier page shows all purchases, the payments made to them (with TT No.) and the total amount the shop still owes them. The <i>Outstanding supplier balances</i> report lists every supplier the shop owes. You can deactivate a supplier you no longer use.</p>
 </section>
 
 <section id="help-inventory" data-title="Stock levels & movements">
@@ -77,6 +81,21 @@
   <li><b>Stock movements</b> is the full history of this branch: every receiving, sale, return, adjustment, count and transfer, with the date, user, reference and balance after it.</li>
 </ul>
 <p>Stock changes only through these transactions, never by typing a number directly.</p>
+</section>
+
+<section id="help-batches" data-title="Stock batches (FIFO)">
+<h2>Stock batches (FIFO) and expiry dates</h2>
+<p>Every time stock comes in, it becomes a <b>batch</b>: a delivery on a purchase, opening stock, a transfer from another branch, or extra stock found in a count. Each batch keeps where it came from, the date received, the quantity received, the quantity still in stock, its unit cost and, if you enter one, its expiry date.</p>
+<ul>
+  <li><b>Which batch is sold first:</b> batches with an expiry date go first, the one that expires soonest first. Then the oldest batch received goes first (<i>First In, First Out</i>). The system does this by itself. If one batch is not enough, it takes the rest from the next one.</li>
+  <li><b>Cost of a sale:</b> the cost of the batches actually used. If an old delivery was cheaper, its lower cost is used until it is sold out. Profit reports use these costs.</li>
+  <li><b>Stock batches page</b> (<b>Stock → Stock batches (FIFO)</b>): all batches in stock in this branch. Choose <i>Expiring soon</i> to see what expires in the next days; expired batches are red.</li>
+  <li><b>A batch page</b> shows its full history: received, sold, returned, written off, with the cost. There you can set or change the <b>expiry date</b>, or click <b>Write off from this batch</b>.</li>
+  <li><b>The product page</b> lists its batches in the order they will be sold.</li>
+  <li><b>Returns and cancellations</b> put the goods back into the batch they came from. <b>Transfers</b> take the batches with them to the other branch.</li>
+  <li><b>Reports:</b> <i>Stock batches (FIFO) and expiry</i> and <i>Cost of goods sold by batch (FIFO)</i>.</li>
+</ul>
+<p>When this feature was installed, the stock already in each branch became one <i>opening batch</i> per product at its average cost, and a copy of the data was saved first in the <code>backups</code> folder.</p>
 </section>
 
 <section id="help-products" data-title="Products & categories">
@@ -99,6 +118,7 @@
 <ul>
   <li><b>Damaged</b>, <b>Expired</b> or <b>Lost</b>: enter how many to remove.</li>
   <li><b>Correction:</b> a positive number adds and a negative number (for example -2) removes.</li>
+  <li><b>Batch</b> (optional): choose the batch it concerns, for example the batch that expired. Leave it on <i>Automatic</i> to use FIFO (the batch that expires first, then the oldest).</li>
 </ul>
 <p>A reason is always required. Every adjustment is saved with your name and appears in the <i>Damaged / expired / lost</i> report.</p>
 </section>
@@ -119,7 +139,7 @@
 <p>Each branch has its own stock, sales, purchases, expenses and stocktakes. The branch you work in is shown in the top bar; if you work in more than one branch, pick it there. Products, prices, suppliers and customers are shared by all branches. Document numbers start with the branch code, for example <i>MAIN-S-000042</i>.</p>
 <ol>
   <li>To move stock, open <b>Transfers</b> in the branch that sends it and click <b>Send stock to another branch</b>.</li>
-  <li>Choose the branch and the products, then click <b>Send now</b>. The stock leaves the sending branch at its average cost and shows as <i>In transit</i>.</li>
+  <li>Choose the branch and the products, then click <b>Send now</b>. The stock leaves the sending branch from its oldest batches (FIFO), at their cost, and shows as <i>In transit</i>. The receiving branch gets the same batches, with the same cost and dates.</li>
   <li>At the other branch, open the transfer, check the quantities that arrived and click <b>Receive</b>. Anything that did not arrive is recorded as lost in transit.</li>
   <li>If the goods never leave, the sending branch can <b>Cancel</b> the transfer and the stock comes back.</li>
 </ol>
@@ -135,15 +155,15 @@
 <h2>Reports</h2>
 <p>Choose a report, set the dates and filters, then click <b>Show</b>.</p>
 <ul>
-  <li><b>Inventory:</b> current stock and value, low stock, movements, damaged/expired/lost, stocktake differences.</li>
-  <li><b>Sales:</b> by day, week or month; by product, category or user; returns; cancelled sales; customer balances.</li>
-  <li><b>Purchases:</b> history, by supplier, by product, outstanding supplier payments.</li>
+  <li><b>Inventory:</b> current stock and value, low stock, stock batches and expiry dates, movements, damaged/expired/lost, stocktake differences.</li>
+  <li><b>Sales:</b> by day, week or month; by product, category or user; returns; cancelled sales; sales by payment status (paid, partly paid, unpaid); customer payments with TT No.; outstanding customer balances; cost of goods sold by batch.</li>
+  <li><b>Purchases:</b> history, by supplier, by product, outstanding supplier payments, outstanding supplier balances, supplier payments with TT No.</li>
   <li><b>Financial:</b> profit summary, expenses, payment collection by method.</li>
   <li><b>Branches</b> (administrators, with more than one branch): sales and profit by branch, stock by branch.</li>
 </ul>
 <p><b>Branch:</b> reports show the branch you work in. If you work in more than one branch, choose another in the <i>Branch</i> box. Administrators can also choose <i>All branches</i>.</p>
 <p><b>Excel</b> downloads the report as an .xlsx file. For a PDF, click <b>Print / PDF</b> and choose <i>Save as PDF</i> as the printer.</p>
-<p><b>Profit:</b> gross profit = sales after discounts and returns − the cost of the goods sold. Net operating profit = gross profit − expenses.</p>
+<p><b>Profit:</b> gross profit = sales after discounts and returns − the cost of the goods sold (the cost of the FIFO batches used). Net operating profit = gross profit − expenses.</p>
 </section>
 
 <section id="help-dashboard" data-title="Dashboard">
@@ -165,7 +185,7 @@
 <p>Open it with the <b>⚙ Admin</b> button at the top of every page, or with <i>Users, settings &amp; backup</i> at the bottom of the side menu. The tabs at the top of the page switch between the sections below.</p>
 <ul>
   <li><b>Users:</b> create one login per person and tick the branches they work in (an administrator works in all). To stop someone logging in, untick <i>Active</i>. To set a new password, type it and save. If someone forgot their password, open the user and click <b>Reset to default password</b>: the password becomes <code>123456</code>, and the person must choose a new one when they log in. Usernames must be unique across all businesses.</li>
-  <li><b>Role permissions:</b> tick what Sales Attendants and Inventory Managers may do, for example give discounts, cancel sales or see profit.</li>
+  <li><b>Role permissions:</b> tick what Sales Attendants and Inventory Managers may do, for example give discounts, sell on credit (unpaid or partly paid sales), cancel sales or see profit.</li>
   <li><b>Business profile:</b> name, address, phone, email, TIN, logo (PNG or JPG, up to 1 MB), currency, payment methods, units of measure and receipt footer.</li>
   <li><b>Backup:</b> each business is backed up separately. A copy of the data is made automatically every day. Click <b>Make and download a backup now</b> and keep copies on a USB stick.</li>
   <li><b>Restore:</b> choose a backup file and click <b>Restore backup</b>. Everyone then logs in again.</li>

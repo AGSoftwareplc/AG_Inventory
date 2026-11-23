@@ -40,7 +40,7 @@ Each screen area is its own Flask *blueprint* (one `.py` file), so a change touc
 ## Data rules
 
 - Money is stored as **whole cents** (integers), so there are no rounding errors. Quantities can have up to 3 decimals, for example 2.5 kg.
-- Product cost is the **weighted average cost**.
+- Product cost uses **FIFO stock batches** (table `stock_batches`, with `batch_moves` linking each stock movement to the batches it used); the average cost shown is the value of the remaining batches.
 - Every stock change is written to `stock_moves` with the user and a reference.
 - Nothing that affects money or stock is deleted. Mistakes are corrected with returns, cancellations, reversals and adjustments.
 
