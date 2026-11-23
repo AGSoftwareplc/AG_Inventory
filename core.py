@@ -228,7 +228,9 @@ MIGRATIONS = [
     ('expenses', 'branch_id', 'INTEGER NOT NULL DEFAULT 1'),
     ('returns', 'branch_id', 'INTEGER NOT NULL DEFAULT 1'),
     ('audit_log', 'branch_id', 'INTEGER'),
+    ('users', 'must_change', 'INTEGER NOT NULL DEFAULT 0'),   # 1 = password was reset; choose a new one at login
 ]
+DEFAULT_PASSWORD = '123456'   # what "Reset to default password" sets; the user must change it at next login
 
 
 def migrate(con):

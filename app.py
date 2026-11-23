@@ -49,11 +49,13 @@ def password():
         cur, new = request.form.get('current', ''), request.form.get('new', '')
         if not check_password_hash(g.user['password_hash'], cur):
             flash('Current password is wrong.', 'error')
+        elif new == cur:
+            flash('Choose a password that is different from the current one.', 'error')
         elif len(new) < 6 or new != request.form.get('confirm'):
             flash('New password must be at least 6 characters and match the confirmation.', 'error')
         else:
             with tx() as db:
-                db.execute('UPDATE users SET password_hash=? WHERE id=?',
+                db.execute('UPDATE users SET password_hash=?, must_change=0 WHERE id=?',
                            (generate_password_hash(new), g.user['id']))
                 audit('password_change', g.user['username'], db)
             flash('Password changed.', 'ok')
@@ -140,6 +142,10 @@ def create_app(database=None, testing=False):
             return
         load_user()
         check_csrf()
+        # a password reset to the default must be changed before anything else
+        if g.user and g.user['must_change'] and request.endpoint not in ('auth.password', 'auth.logout', 'auth.logo'):
+            flash('Your password was reset. Please choose a new password to continue.', 'error')
+            return redirect(url_for('auth.password'))
         if g.user and not app.config['TESTING']:
             try:
                 core.daily_backup()

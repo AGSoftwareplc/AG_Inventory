@@ -43,7 +43,7 @@
 <script>try { if (localStorage.getItem('navMini') === '1') document.body.classList.add('mini'); } catch (e) {}</script>
 <header class="top">
   <label for="navtoggle" class="burger" aria-label="Menu">☰</label>
-  <a class="shop" href="{{ url_for('dash.index') }}">{% if setting('logo_file') %}<img src="{{ url_for('auth.logo') }}" alt="" class="toplogo">{% endif %}<span>{{ setting('shop_name') }}</span></a>
+  <a class="shop" href="{{ url_for('dash.index') }}" title="{{ setting('shop_name') }}">{% if setting('logo_file') %}<img src="{{ url_for('auth.logo') }}" alt="" class="toplogo">{% else %}<span class="toplogo initials">{{ (setting('shop_name').split()|map('first')|join|upper)[:2] }}</span>{% endif %}<span>{{ setting('shop_name') }}</span></a>
   {% if g.branch %}{% if g.branches|length > 1 %}<form method="post" action="{{ url_for('auth.switch_branch') }}" class="branchpick" title="Branch you are working in">{{ csrf() }}
     <input type="hidden" name="next" value="{{ request.full_path if request.method == 'GET' else '' }}">
     <select name="branch" onchange="this.form.submit()" aria-label="Branch">{% for b in g.branches %}<option value="{{ b.id }}" {{ 'selected' if b.id == g.branch.id }}>📍 {{ b.name }}</option>{% endfor %}</select></form>
@@ -55,11 +55,12 @@
 </header>
 <input type="checkbox" id="navtoggle" hidden>
 <aside class="side">
-  <button type="button" class="minibtn" onclick="toggleMini()" title="Make the menu narrow / wide"><span class="ic">«</span><span class="lb">Narrow menu</span></button>
+  {% set minibtn %}<button type="button" class="minibtn" onclick="toggleMini()" title="Narrow / wide menu" aria-label="Narrow / wide menu">«</button>{% endset %}
+  {% if not can('pos') %}<div class="sellrow alone">{{ minibtn }}</div>{% endif %}
   {% for title, key, items in menu %}{% set shown = items|selectattr('2')|list %}{% if shown %}
   {% if title %}<details class="group g-{{ key }}" data-key="{{ key }}" open{{ ' data-active=1' if shown|selectattr('3')|list }}>
     <summary class="gtitle">{{ title }}</summary>{% else %}<div class="group g-{{ key }}">{% endif %}
-    {% for endpoint, label, allowed, active, cls, icon in shown %}<a href="{{ url_for(endpoint) }}" class="{{ cls }} {{ 'on' if active }}" title="{{ label }}"><span class="ic">{{ icon }}</span><span class="lb">{{ label }}</span></a>{% endfor %}
+    {% for endpoint, label, allowed, active, cls, icon in shown %}{% if cls == 'sell' %}<div class="sellrow">{% endif %}<a href="{{ url_for(endpoint) }}" class="{{ cls }} {{ 'on' if active }}" title="{{ label }}"><span class="ic">{{ icon }}</span><span class="lb">{{ label }}</span></a>{% if cls == 'sell' %}{{ minibtn }}</div>{% endif %}{% endfor %}
   {% if title %}</details>{% else %}</div>{% endif %}{% endif %}{% endfor %}
   <div class="group g-help"><a href="#" onclick="openHelp();return false" title="Help / user manual"><span class="ic">❓</span><span class="lb">Help / user manual</span></a></div>
   <div class="group mobile-user"><div class="gtitle">{{ g.user.full_name }}</div>

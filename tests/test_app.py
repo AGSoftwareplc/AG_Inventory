@@ -614,6 +614,24 @@ class ShopTest(unittest.TestCase):
                                                  'min_stock': '0'}, once=False)
         self.assertEqual(self.one("SELECT unit FROM products WHERE code='RICE'")['unit'], 'sack')
 
+    def test_reset_password_to_default(self):
+        cashier = self.one("SELECT id FROM users WHERE username='cashier'")['id']
+        r = self.post(f'/admin/users/{cashier}/reset-password', {}, once=False, follow_redirects=True)
+        self.assertIn(b'reset to 123456', r.data)
+        self.login('cashier', '123456')
+        r = self.c.get('/sales/pos')  # must change the password first
+        self.assertEqual(r.status_code, 302)
+        self.assertIn('/password', r.headers['Location'])
+        self.post('/password', {'current': '123456', 'new': 'newpass9', 'confirm': 'newpass9'}, once=False)
+        self.assertEqual(self.c.get('/sales/pos').status_code, 200)
+        self.assertEqual(self.one("SELECT must_change FROM users WHERE username='cashier'")['must_change'], 0)
+
+    def test_header_shows_business_name_and_menu_button(self):
+        html = self.c.get('/').data.decode()
+        self.assertIn('class="toplogo initials">MS<', html)  # My Shop, no logo yet
+        self.assertNotIn('Narrow menu', html)
+        self.assertIn('class="sellrow"', html)
+
     def test_business_profile_and_logo(self):
         png = (b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00'
                b'\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00'

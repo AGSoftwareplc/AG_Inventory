@@ -62,15 +62,20 @@ body.app .top { grid-column: 1 / -1; }
 .side a.on { background: var(--gbg); color: var(--gc); font-weight: 600; border-left-color: var(--gc); }
 .side a.sell { background: var(--brand); color: #fff; font-weight: 700; justify-content: center; padding: .55rem; margin-bottom: .2rem; }
 .side a.sell:hover, .side a.sell.on { background: var(--brand-dark); color: #fff; }
-.minibtn { display: flex; align-items: center; gap: .5rem; width: 100%; background: none; border: none; color: var(--muted);
-  font-size: .8rem; padding: .2rem .6rem .45rem; cursor: pointer; justify-content: flex-end; }
-.minibtn:hover { background: none; color: var(--brand); }
-.minibtn .ic { order: 2; font-size: 1rem; }
+/* the « button sits to the right of the blue Sell (POS) button and makes the menu narrow / wide */
+.sellrow { display: flex; gap: .3rem; align-items: stretch; margin-bottom: .2rem; }
+.sellrow a.sell { flex: 1; margin-bottom: 0; }
+.sellrow.alone { justify-content: flex-end; }
+.minibtn { display: flex; align-items: center; justify-content: center; flex: none; width: 2.2rem; padding: 0; font-size: 1.15rem;
+  line-height: 1; background: #fff; color: var(--brand); border: 1px solid var(--line); border-radius: 7px; cursor: pointer; min-height: 2.2rem; }
+.minibtn:hover { background: #e1ecf7; color: var(--brand-dark); }
+.toplogo.initials { display: inline-flex; align-items: center; justify-content: center; width: 34px; color: var(--brand);
+  font-weight: 800; font-size: .95rem; letter-spacing: .02em; }
 /* narrow menu: icons only (hover shows the name) */
 body.app.mini { grid-template-columns: 64px minmax(0, 1fr); }
 .mini .side { padding: .5rem .35rem 2rem; overflow-x: hidden; }
 .mini .side .lb, .mini .side .gtitle { display: none; }
-.mini .side .minibtn { justify-content: center; padding: .2rem 0 .5rem; } .mini .minibtn .ic { transform: rotate(180deg); }
+.mini .sellrow { flex-direction: column; } .mini .side .minibtn { width: 100%; } .mini .minibtn { transform: rotate(180deg); }
 .mini .side a { justify-content: center; padding: .45rem 0; margin-left: 0; border-left: none; }
 .mini .side a.sell { padding: .55rem 0; }
 .mini .side details.group { border-top: 3px solid var(--gc); padding-top: .25rem; border-radius: 2px; }

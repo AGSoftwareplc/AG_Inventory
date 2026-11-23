@@ -11,5 +11,8 @@
   <div class="checks">{% for br in branches %}<label class="inline"><input type="checkbox" name="branch" value="{{ br.id }}" {{ 'checked' if br.id in mine }}> {{ br.name }}{% if not br.active %} (closed){% endif %}</label>{% endfor %}</div>
   <small class="muted">Administrators can work in every branch.</small></div>
 </div><div class="actions"><button>Save user</button> <a class="btn light" href="{{ url_for('admin.users') }}">Cancel</a></div></form>
+{% if u %}<form method="post" action="{{ url_for('admin.user_reset_password', uid=u.id) }}" class="card filters">{{ csrf() }}
+  <div class="grow"><b>Forgot password?</b> <span class="muted">Reset it to the default password <code>{{ default_password }}</code>. {{ u.username }} must choose a new one at the next login.</span></div>
+  <div style="flex:0"><button class="light">Reset to default password</button></div></form>{% endif %}
 <p class="muted">What each role may do is set under <a href="{{ url_for('admin.roles') }}">Role permissions</a>. Administrators can do everything.</p>
 {% endblock %}

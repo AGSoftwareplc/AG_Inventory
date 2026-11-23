@@ -75,7 +75,24 @@ def user_edit(uid=None):
         if uid else {1}
     if request.method == 'POST':
         mine = {int(b) for b in request.form.getlist('branch') if b.isdigit()}
-    return render_template('admin/user_edit.html', u=u, roles=ROLES, f=request.form, branches=branches, mine=mine)
+    return render_template('admin/user_edit.html', u=u, roles=ROLES, f=request.form, branches=branches, mine=mine,
+                           default_password=core.DEFAULT_PASSWORD)
+
+
+@bp.route('/users/<int:uid>/reset-password', methods=['POST'])
+@admin_required
+def user_reset_password(uid):
+    """Set a user's password back to the default; they must choose a new one when they next log in."""
+    u = get_db().execute('SELECT * FROM users WHERE id=?', (uid,)).fetchone()
+    if not u:
+        return core.fail('User not found.', 'admin.users')
+    with tx() as db:
+        db.execute('UPDATE users SET password_hash=?, must_change=1 WHERE id=?',
+                   (generate_password_hash(core.DEFAULT_PASSWORD), uid))
+        audit('password_reset', u['username'], db)
+    flash(f"Password of {u['username']} reset to {core.DEFAULT_PASSWORD}. "
+          'They must choose a new password when they log in.', 'ok')
+    return redirect(url_for('admin.user_edit', uid=uid))
 
 
 @bp.route('/branches')
@@ -178,6 +195,9 @@ def settings():
             elif request.form.get('remove_logo'):
                 db.execute("UPDATE settings SET value='' WHERE key='logo_file'")
         g.pop('settings', None)
+        if request.form.get('shop_name', '').strip():  # keep the business list (Super Admin) in step
+            core.get_platform().execute('UPDATE businesses SET name=? WHERE id=?',
+                                        (request.form['shop_name'].strip(), g.business['id']))
         flash('Business profile saved.', 'ok')
         return redirect(url_for('admin.settings'))
     bdir = core.current_app.config['BACKUP_DIR']
