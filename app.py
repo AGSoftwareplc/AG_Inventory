@@ -93,6 +93,7 @@ def create_app(database=None, testing=False):
         SESSION_COOKIE_SAMESITE='Lax',
         SEND_FILE_MAX_AGE_DEFAULT=0,  # browsers re-check CSS/JS, so updates show without clearing the cache
     )
+    core.backup_before_upgrade(app.config['DATABASE'], app.config['BACKUP_DIR'])
     # one small platform file lists the businesses; each business has its own database file
     app.config['PLATFORM_DB'] = os.path.join(os.path.dirname(os.path.abspath(app.config['DATABASE'])),
                                              'platform.db')

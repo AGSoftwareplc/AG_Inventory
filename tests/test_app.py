@@ -417,6 +417,19 @@ class ShopTest(unittest.TestCase):
         con.close()
         self.assertIn('reversal_of', cols)
 
+    def test_backup_before_v2_upgrade(self):
+        con = self.db()
+        con.execute('DROP TABLE user_branches')
+        con.execute('DROP TABLE branches')
+        con.close()
+        backups = os.path.join(self.tmp, 'bk')
+        path = core.backup_before_upgrade(self.dbfile, backups)
+        self.assertTrue(path and os.path.exists(path))
+        self.assertIsNone(core.backup_before_upgrade(self.dbfile.replace('test', 'none'), backups))
+        core.init_db(self.dbfile)  # upgrades again: branches are back
+        self.assertTrue(self.one('SELECT 1 FROM branches WHERE id=1'))
+        self.assertIsNone(core.backup_before_upgrade(self.dbfile, backups))  # already v2: no copy
+
     # ---------------------------------------------------------------- businesses & branches
     def platform(self):
         return connect(os.path.join(self.tmp, 'platform.db'))

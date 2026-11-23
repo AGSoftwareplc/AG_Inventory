@@ -333,6 +333,26 @@ def backup_db(dest_dir=None, keep=30):
     return dest
 
 
+def backup_before_upgrade(path, dest_dir):
+    """Before the first start of version 2 (businesses and branches), keep a copy of the old data."""
+    if not os.path.exists(path):
+        return None
+    con = connect(path)
+    try:
+        old = (con.execute("SELECT 1 FROM sqlite_master WHERE name='products'").fetchone()
+               and not con.execute("SELECT 1 FROM sqlite_master WHERE name='branches'").fetchone())
+        if not old:
+            return None
+        os.makedirs(dest_dir, exist_ok=True)
+        dest = os.path.join(dest_dir, f"shop-before-v2-{datetime.now():%Y%m%d-%H%M%S}.db")
+        out = sqlite3.connect(dest)
+        con.backup(out)
+        out.close()
+        return dest
+    finally:
+        con.close()
+
+
 def daily_backup():
     today = date.today().isoformat()
     if setting('last_backup') == today:
