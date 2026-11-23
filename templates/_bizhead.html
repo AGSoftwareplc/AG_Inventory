@@ -5,5 +5,6 @@
   {% if setting('shop_address') %}<div>{{ setting('shop_address') }}</div>{% endif %}
   <div>{{ [setting('shop_phone'), setting('shop_email')]|select|join(' · ') }}</div>
   {% if setting('shop_tin') %}<div>TIN: {{ setting('shop_tin') }}</div>{% endif %}
-  {% if g.branch %}<div class="muted">Branch: {{ g.branch.name }}{% if g.branch.address %}, {{ g.branch.address }}{% endif %}</div>{% endif %}
+  {% if where is defined and where %}<div class="muted">{{ where }}</div>
+  {% elif g.branch %}<div class="muted">Branch: {{ g.branch.name }}{% if g.branch.address %}, {{ g.branch.address }}{% endif %}</div>{% endif %}
 </div>

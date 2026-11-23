@@ -3,7 +3,7 @@ import os
 import sqlite3
 import tempfile
 
-from flask import Blueprint, flash, g, redirect, render_template, request, send_file, url_for
+from flask import Blueprint, abort, flash, g, redirect, render_template, request, send_file, url_for
 from werkzeug.security import generate_password_hash
 
 import core
@@ -223,3 +223,44 @@ def audit_log():
     rows = get_db().execute('SELECT a.*, u.username FROM audit_log a LEFT JOIN users u ON u.id=a.user_id '
                             'ORDER BY a.id DESC LIMIT 500').fetchall()
     return render_template('admin/audit.html', rows=rows)
+
+
+# ---------------------------------------------------------------- businesses (Super Admin only)
+@bp.route('/businesses', methods=['GET', 'POST'])
+@admin_required
+def businesses():
+    """Super Admin: every business on this computer, add a new one, open or close one."""
+    if not g.is_super:
+        abort(403)
+    p = core.get_platform()
+    if request.method == 'POST':
+        f = request.form
+        try:
+            if f.get('toggle'):
+                bid = int(f['toggle'])
+                if bid == g.business['id']:
+                    raise RuleError('You cannot close your own business.')
+                p.execute('UPDATE businesses SET active=1-active WHERE id=?', (bid,))
+                audit('business_toggle', str(bid))
+                flash('Business updated.', 'ok')
+            else:
+                bid = core.create_business(f.get('name', ''), f.get('code', ''), f.get('admin_username', ''),
+                                           f.get('admin_name', ''), f.get('admin_password', ''))
+                audit('business_create', f"{f.get('code', '').upper()} {f.get('name', '')}")
+                flash(f"Business created. Its administrator can now log in as {f.get('admin_username', '').strip()}.", 'ok')
+            return redirect(url_for('admin.businesses'))
+        except (RuleError, ValueError) as e:
+            flash(str(e) if isinstance(e, RuleError) else 'Choose a business.', 'error')
+    rows = []
+    for b in p.execute('SELECT * FROM businesses ORDER BY id').fetchall():
+        info = {'users': 0, 'branches': 0}
+        path = core.business_file(core.platform_path(), b)
+        if os.path.exists(path):
+            con = core.connect(path)
+            try:
+                info = {'users': con.execute('SELECT COUNT(*) FROM users WHERE active=1').fetchone()[0],
+                        'branches': con.execute('SELECT COUNT(*) FROM branches WHERE active=1').fetchone()[0]}
+            finally:
+                con.close()
+        rows.append(dict(b, **info))
+    return render_template('admin/businesses.html', rows=rows, f=request.form)
