@@ -7,14 +7,16 @@
     <ul><li>Administrator: <code>admin</code> / <code>admin123</code></li>
         <li>Sales Attendants: <code>cashier</code> / <code>cashier123</code>, <code>cashier2</code> / <code>sales222</code>, <code>cashier3</code> / <code>sales333</code></li>
         <li>Inventory Manager: <code>storekeeper</code> / <code>store123</code></li></ul>
-    Each person should change their password straight away with <b>Password</b> at the top right. The administrator can rename these users or add more in <b>⚙ Admin → Users</b>.</li>
-  <li><b>Set up the shop:</b> click <b>⚙ Admin</b> at the top, then <b>Settings &amp; backup</b>, and enter the shop name, address, phone and payment methods. These appear on receipts.</li>
-  <li><b>Add your staff:</b> in <b>⚙ Admin → Users</b>, give each person a role. A Sales Attendant sells. An Inventory Manager buys, receives and counts stock.</li>
-  <li><b>Add products:</b> use <b>Products → New product</b>. For goods already on the shelf, enter the <i>Opening stock</i> and <i>Purchase cost</i>.</li>
+    A red warning shows on the dashboard until these passwords are changed. Each person should change their password straight away: click <b>Password</b> at the top right, type the current password, then the new one twice (at least 6 characters). The administrator can rename these users or add more in <b>⚙ Admin → Users</b>.</li>
+  <li><b>Set up the business:</b> click <b>⚙ Admin</b> at the top, then <b>Business profile &amp; backup</b>. Enter the business name, address, phone, email, TIN, logo, currency, payment methods and units of measure. The logo and details appear in the top bar, on receipts and on printed reports.</li>
+  <li><b>Branches</b> (if you have more than one shop): add them in <b>⚙ Admin → Branches</b>. See <i>Branches and transfers</i>.</li>
+  <li><b>Add your staff:</b> in <b>⚙ Admin → Users</b>, give each person a role and tick the branches they work in. A Sales Attendant sells. An Inventory Manager buys, receives, counts and transfers stock.</li>
+  <li><b>Add products:</b> use <b>Products → New product</b>, or <b>+ Several products</b> to type many at once. For goods already on the shelf, enter the <i>Opening stock</i> and <i>Purchase cost</i>.</li>
   <li><b>Start working:</b> sell with <b>Sell (POS)</b>, and buy with <b>Purchases &amp; receiving</b>.</li>
 </ol>
 <p><b>The menu on the left</b> is in the order of daily work. It shows only what your role is allowed to do. On a phone, tap ☰ to open it. Each area has its own colour: <b style="color:#13795b">Selling</b> green, <b style="color:#c2410c">Buying</b> orange, <b style="color:#1d63b8">Stock</b> blue, <b style="color:#6d3fc8">Money &amp; reports</b> purple and <b style="color:#475569">Administration</b> grey. Click a group title to fold it open or shut. Click <b>Narrow menu «</b> at the top to show icons only (point at an icon to see its name), and <b>»</b> to widen it again. The menu remembers your choice.</p>
-<p><b>Help:</b> click <b>? Help</b> or press <b>F1</b> on any page to read about that page.</p>
+<p><b>The top bar</b> shows the business logo and name, the branch you are working in (📍), <b>⚙ Admin</b> for administrators, <b>? Help</b>, <b>Password</b> and <b>Log out</b>.</p>
+<p><b>Help:</b> click <b>? Help</b> or press <b>F1</b> on any page to read about that page. <b>Open full manual / print</b> shows the whole manual on one page.</p>
 </section>
 
 <section id="help-pos" data-title="Sell (POS)">
@@ -27,6 +29,7 @@
   <li>Click <b>Complete sale</b>, then <b>Print receipt</b>.</li>
 </ol>
 <p><b>Credit sale</b> (customer pays later): choose a registered customer and enter the part they paid now. You take the rest later on the sale page.</p>
+<p>The POS sells from the stock of the branch shown in the top bar, and the receipt number starts with that branch's code.</p>
 <p>A red <i>"only X in stock"</i> label means there isn't enough stock. The sale can't be completed until you lower the quantity.</p>
 <p>Clicking <b>Complete sale</b> twice by mistake doesn't record the sale twice.</p>
 </section>
@@ -70,8 +73,8 @@
 <section id="help-inventory" data-title="Stock levels & movements">
 <h2>Stock levels and movements</h2>
 <ul>
-  <li><b>Stock levels</b> shows every active product with its quantity, minimum level and value at cost. Rows highlighted in yellow are at or below their minimum, which means it's time to reorder. The yellow bar at the top of every page counts them.</li>
-  <li><b>Stock movements</b> is the full history: every receiving, sale, return, adjustment and count, with the date, user, reference and balance after it.</li>
+  <li><b>Stock levels</b> shows every active product with its quantity, minimum level and value at cost <b>in the branch you are working in</b>. Rows highlighted in yellow are at or below their minimum, which means it's time to reorder. The yellow bar at the top of every page counts them for this branch.</li>
+  <li><b>Stock movements</b> is the full history of this branch: every receiving, sale, return, adjustment, count and transfer, with the date, user, reference and balance after it.</li>
 </ul>
 <p>Stock changes only through these transactions, never by typing a number directly.</p>
 </section>
@@ -81,7 +84,9 @@
 <ul>
   <li><b>New product:</b> enter a unique code, the name, category, unit (pcs, kg, litre…), selling price and minimum stock level. A barcode is optional. To add your own units, such as <i>sack</i>, an administrator adds them to <b>Units of measure</b> in <b>⚙ Admin → Business profile</b>.</li>
   <li><b>Several products at once:</b> click <b>+ Several products</b>. Type one product per row. A new empty row appears as you type in the last one, and <b>×</b> removes a row. Click <b>Save all products</b>. If a row has a mistake, such as a missing price or a code that is already used, nothing is saved yet. That row turns red with the reason, and everything you typed stays in place.</li>
-  <li><b>Opening stock:</b> for goods already in the shop, enter the quantity and purchase cost once, when you create the product.</li>
+  <li><b>Unit:</b> choose it from the list. Quantities can have decimals, for example 2.5 kg or 0.75 litre.</li>
+  <li><b>Opening stock:</b> for goods already in the shop, enter the quantity and purchase cost once, when you create the product. It goes into the branch you are working in.</li>
+  <li><b>Shared by all branches:</b> the product list and selling prices are the same in every branch. Each branch has its own stock of them.</li>
   <li><b>Change a price:</b> edit the product. Old sales keep their old prices, and price changes are logged.</li>
   <li><b>Stop selling a product:</b> untick <i>Active</i>. A product that has been used can't be deleted.</li>
   <li><b>Categories:</b> group products, for example Drinks or Food. Use them in searches and reports.</li>
@@ -143,7 +148,9 @@
 
 <section id="help-dashboard" data-title="Dashboard">
 <h2>Dashboard</h2>
-<p>The dashboard shows today's figures: sales, purchases, expenses, gross and net profit, stock value, low-stock products and best sellers. Change the dates to see another period. Staff without report rights see only counts, not money figures.</p>
+<p>The dashboard shows today's figures: sales, purchases, expenses, gross and net profit, stock value, low-stock products and best sellers. Staff without report rights see only counts, not money figures.</p>
+<p><b>Filter row at the top:</b> choose the <b>Branch</b> (if you work in more than one) and the <b>From</b> and <b>To</b> dates, then click <b>Show</b>. The chosen branch and period are shown at the right. Administrators can choose <b>All branches</b>; this adds a <b>Branches compared</b> chart with each branch's sales, profit and stock value.</p>
+<p><b>Cards</b> use the menu colours: green for selling, orange for buying, purple for money, blue for stock and amber for low stock.</p>
 <ul>
   <li><b>Sales per day:</b> one bar per day. With only one day chosen, it shows the last 14 days. For more than two months, it shows one bar per month. Point at a bar to see the amount.</li>
   <li><b>Where the money went:</b> net sales, the cost of the goods sold, expenses and the profit that is left.</li>
@@ -157,13 +164,13 @@
 <h2>Administration (administrators only)</h2>
 <p>Open it with the <b>⚙ Admin</b> button at the top of every page, or with <i>Users, settings &amp; backup</i> at the bottom of the side menu. The tabs at the top of the page switch between the sections below.</p>
 <ul>
-  <li><b>Users:</b> create one login per person. To stop someone logging in, untick <i>Active</i>. To reset a password, type a new one.</li>
+  <li><b>Users:</b> create one login per person and tick the branches they work in (an administrator works in all). To stop someone logging in, untick <i>Active</i>. To reset a password, type a new one. Usernames must be unique across all businesses.</li>
   <li><b>Role permissions:</b> tick what Sales Attendants and Inventory Managers may do, for example give discounts, cancel sales or see profit.</li>
-  <li><b>Settings:</b> shop details for receipts, currency, payment methods, receipt footer.</li>
-  <li><b>Backup:</b> a copy of the data is made automatically every day. Click <b>Make and download a backup now</b> and keep copies on a USB stick.</li>
+  <li><b>Business profile:</b> name, address, phone, email, TIN, logo (PNG or JPG, up to 1 MB), currency, payment methods, units of measure and receipt footer.</li>
+  <li><b>Backup:</b> each business is backed up separately. A copy of the data is made automatically every day. Click <b>Make and download a backup now</b> and keep copies on a USB stick.</li>
   <li><b>Restore:</b> choose a backup file and click <b>Restore backup</b>. Everyone then logs in again.</li>
   <li><b>Branches:</b> add a branch with a short code (used in document numbers) and tick on each user's page which branches they work in. A closed branch keeps its history.</li>
-  <li><b>Businesses</b> (Super Admin only): add another business with its own administrator, or close one. Each business has its own data, profile and logo, and cannot see the others.</li>
+  <li><b>Businesses</b> (Super Admin only): add another business with its name, a short code and its first administrator's login, or close and reopen one. Each business has its own data, profile, logo, branches and users, and cannot see the others. A closed business keeps its data, but nobody can log in to it. The administrators of the first business are the Super Admins.</li>
   <li><b>Audit log:</b> shows who did what, such as logins, price changes, cancellations, returns and adjustments.</li>
 </ul>
 </section>
@@ -181,6 +188,12 @@
   <dd>Reload the page and try again.</dd>
   <dt><b>I see "Not allowed".</b></dt>
   <dd>Your role doesn't have that permission. Ask the administrator.</dd>
+  <dt><b>I can't see the sales or stock of another branch.</b></dt>
+  <dd>Pages show the branch in the top bar. Pick another branch there, if you work in it. Administrators can use <b>All branches</b> on the dashboard and in reports.</dd>
+  <dt><b>A transfer is still "In transit".</b></dt>
+  <dd>The receiving branch must open it and click <b>Receive</b>. Switch to that branch in the top bar first.</dd>
+  <dt><b>The app was started twice.</b></dt>
+  <dd>Run <code>start.bat</code> only once. If the app is already open, just use the browser. To restart, close the black window first.</dd>
   <dt><b>Forgot a password.</b></dt>
   <dd>An administrator can set a new one in <i>Users</i>.</dd>
 </dl>

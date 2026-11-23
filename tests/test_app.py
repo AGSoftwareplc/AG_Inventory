@@ -569,7 +569,7 @@ class ShopTest(unittest.TestCase):
         self.assertNotIn('450.00', html)
         html = self.c.get('/?branch=all').data.decode()
         self.assertIn('450.00', html)
-        self.assertIn('Branches compared', html)
+        self.assertIn('<h2>Branches compared', html)
         html = self.c.get(f'/reports/?r=stock&branch={bole}').data.decode()
         self.assertIn('Bole shop', html)
         self.assertIn('<td class="n">3</td>', html)
@@ -582,7 +582,7 @@ class ShopTest(unittest.TestCase):
                                         'password': 'secret1', 'active': '1', 'branch': [str(bole)]}, once=False)
         self.login('boleuser', 'secret1')
         html = self.c.get('/?branch=all').data.decode()
-        self.assertNotIn('Branches compared', html)
+        self.assertNotIn('<h2>Branches compared', html)
 
     def test_super_admin_manages_businesses(self):
         r = self.post('/admin/businesses', {'name': 'Second Shop', 'code': 'sec', 'admin_username': 'owner2',
