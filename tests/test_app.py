@@ -602,6 +602,18 @@ class ShopTest(unittest.TestCase):
         r = self.post('/admin/businesses', {'toggle': '1'}, once=False, follow_redirects=True)
         self.assertIn(b'cannot close your own business', r.data)
 
+    def test_unit_choices(self):
+        html = self.c.get('/products/new').data.decode()
+        for u in ('pcs', 'kg', 'litre', 'carton', 'dozen'):
+            self.assertIn(f'<option >{u}</option>', html.replace('selected', ''))
+        self.post('/admin/settings', {'shop_name': 'S', 'currency': 'ETB', 'payment_methods': 'Cash',
+                                      'units': 'pcs,kg,sack'}, once=False)
+        self.assertIn('>sack</option>', self.c.get('/products/bulk').data.decode())
+        p = self.product(code='RICE')
+        self.post(f"/products/{p['id']}/edit", {'code': 'RICE', 'name': 'Rice', 'unit': 'sack', 'price': '10',
+                                                 'min_stock': '0'}, once=False)
+        self.assertEqual(self.one("SELECT unit FROM products WHERE code='RICE'")['unit'], 'sack')
+
     def test_business_profile_and_logo(self):
         png = (b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00'
                b'\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00'

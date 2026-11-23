@@ -4,11 +4,11 @@ import sqlite3
 from flask import Blueprint, flash, g, redirect, render_template, request, url_for
 
 from core import RuleError, audit, branch_id, claim_once, fail, get_db, parse_money, parse_qty, requires, tx
+import core
 from rules import move_stock
 
 bp = Blueprint('products', __name__, url_prefix='/products')
 
-UNITS = ['pcs', 'kg', 'g', 'litre', 'ml', 'm', 'box', 'pack', 'dozen', 'bottle', 'bag']
 
 
 def categories(active_only=False):
@@ -127,7 +127,7 @@ def bulk():
                 flash('Another product already uses one of these codes or barcodes.', 'error')
             except RuleError as e:
                 flash(str(e), 'error')
-    return render_template('products/bulk.html', rows=rows, errors=errors, cats=categories(True), units=UNITS)
+    return render_template('products/bulk.html', rows=rows, errors=errors, cats=categories(True), units=core.units())
 
 
 @bp.route('/new', methods=['GET', 'POST'])
@@ -161,7 +161,7 @@ def edit(pid=None):
         except RuleError as e:
             flash(str(e), 'error')
     return render_template('products/edit.html', p=p, f=request.form, cats=categories(True),
-                           units=UNITS)
+                           units=core.units(p['unit'] if p else None))
 
 
 @bp.route('/<int:pid>')

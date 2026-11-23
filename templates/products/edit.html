@@ -8,7 +8,7 @@
   <div class="wide" style="grid-column:span 2"><label>Name *</label><input name="name" value="{{ val('name') }}" required></div>
   <div><label>Category</label><select name="category_id"><option value="">(none)</option>
     {% for c in cats %}<option value="{{ c.id }}" {{ 'selected' if val('category_id')|string == c.id|string }}>{{ c.name }}</option>{% endfor %}</select></div>
-  <div><label>Unit of measurement</label><input name="unit" list="units" value="{{ val('unit', 'pcs') }}"><datalist id="units">{% for u in units %}<option value="{{ u }}">{% endfor %}</datalist></div>
+  <div><label>Unit of measurement</label><select name="unit">{% set cur = val('unit', units[0]) %}{% for u in units %}<option {{ 'selected' if u == cur }}>{{ u }}</option>{% endfor %}</select></div>
   <div><label>Barcode (optional)</label><input name="barcode" value="{{ val('barcode') }}"></div>
   <div><label>Selling price ({{ currency }}) *</label><input name="price" inputmode="decimal" value="{{ f.price if f.price is defined else (p.price|money_input if p else '') }}" required></div>
   {% if not p %}

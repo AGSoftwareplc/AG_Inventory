@@ -18,6 +18,7 @@
 <div class="grid">
 <div><label>Currency</label><input name="currency" value="{{ setting('currency') }}"></div>
 <div class="wide"><label>Payment methods (comma separated)</label><input name="payment_methods" value="{{ setting('payment_methods') }}"></div>
+<div class="wide"><label>Units of measure for products (comma separated, first one is the default)</label><input name="units" value="{{ setting('units') }}"></div>
 <div class="wide"><label>Receipt footer</label><input name="receipt_footer" value="{{ setting('receipt_footer') }}"></div>
 <div class="wide"><label><input type="checkbox" name="allow_negative" value="1" {{ 'checked' if setting('allow_negative') == '1' }}> Allow selling below zero stock (not recommended)</label></div>
 </div><div class="actions"><button>Save</button></div></form>
