@@ -470,6 +470,57 @@ class ShopTest(unittest.TestCase):
                                             'role': 'Sales Attendant', 'password': 'secret9', 'active': '1'}, once=False)
         self.assertIn(b'already taken', r.data)
 
+    def test_branches_users_and_picker(self):
+        r = self.post('/admin/branches/new', {'code': 'bole', 'name': 'Bole shop', 'address': 'Bole Rd',
+                                               'active': '1'}, once=False, follow_redirects=True)
+        self.assertIn(b'Branch saved', r.data)
+        bole = self.one("SELECT * FROM branches WHERE code='BOLE'")
+        self.assertEqual(bole['name'], 'Bole shop')
+        r = self.post('/admin/branches/new', {'code': 'BOLE', 'name': 'Dup'}, once=False)
+        self.assertIn(b'already uses this code', r.data)
+        # with two branches a user must be given at least one
+        r = self.post('/admin/users/new', {'username': 'abel', 'full_name': 'Abel', 'role': 'Sales Attendant',
+                                            'password': 'secret1', 'active': '1'}, once=False)
+        self.assertIn(b'Tick at least one branch', r.data)
+        self.post('/admin/users/new', {'username': 'abel', 'full_name': 'Abel', 'role': 'Sales Attendant',
+                                        'password': 'secret1', 'active': '1', 'branch': [str(bole['id'])]}, once=False)
+        # the admin can pick either branch in the top bar; Abel only works in Bole
+        html = self.c.get('/').data.decode()
+        self.assertIn('name="branch"', html)
+        self.post('/branch', {'branch': str(bole['id']), 'next': '/'}, once=False)
+        self.assertIn('selected>📍 Bole shop', self.c.get('/').data.decode())
+        self.login('abel', 'secret1')
+        html = self.c.get('/').data.decode()
+        self.assertIn('📍 Bole shop', html)
+        self.assertNotIn('Main branch', html[:html.index('</header>')])
+        self.post('/branch', {'branch': '1'}, once=False)  # not his branch: ignored
+        self.assertNotIn('Main branch', self.c.get('/').data.decode().split('</header>')[0])
+
+    def test_business_profile_and_logo(self):
+        png = (b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00'
+               b'\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00'
+               b'\x00\x00IEND\xaeB`\x82')
+        data = {'shop_name': 'Abebe Traders', 'shop_tin': '0012345678', 'shop_email': 'info@example.com',
+                'currency': 'ETB', 'payment_methods': 'Cash', 'receipt_footer': 'Thanks',
+                'logo': (io.BytesIO(png), 'logo.png')}
+        r = self.post('/admin/settings', data, once=False, content_type='multipart/form-data', follow_redirects=True)
+        self.assertIn(b'Business profile saved', r.data)
+        self.assertIn(b'class="toplogo"', r.data)
+        self.assertEqual(self.c.get('/logo').data, png)
+        # wrong file type is refused
+        bad = dict(data, logo=(io.BytesIO(b'not an image'), 'logo.gif'))
+        r = self.post('/admin/settings', bad, once=False, content_type='multipart/form-data', follow_redirects=True)
+        self.assertIn(b'PNG or JPG', r.data)
+        # letterhead on receipts shows the logo, TIN and branch
+        p = self.product(price='100', cost='50', opening='5')
+        self.sell([(p['id'], 1)], tendered='100')
+        sid = self.one('SELECT id FROM sales ORDER BY id DESC')['id']
+        html = self.c.get(f'/sales/{sid}/receipt').data.decode()
+        self.assertIn('Abebe Traders', html)
+        self.assertIn('TIN: 0012345678', html)
+        self.assertIn('class="headlogo"', html)
+        self.assertIn('Branch: Main branch', html)
+
     # ---------------------------------------------------------------- side menu and help
     def test_side_menu_order_and_help(self):
         html = self.c.get('/').data.decode()

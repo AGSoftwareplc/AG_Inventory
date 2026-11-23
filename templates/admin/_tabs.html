@@ -1,3 +1,3 @@
 <div class="actions noprint" style="margin:0 0 1rem">
-{% for ep, l in [('admin.users','Users'),('admin.roles','Role permissions'),('admin.settings','Settings & backup'),('admin.audit_log','Audit log')] %}
-<a class="btn {{ '' if request.endpoint == ep else 'light' }} small" href="{{ url_for(ep) }}">{{ l }}</a>{% endfor %}</div>
+{% for ep, l in [('admin.settings','Business profile & backup'),('admin.branches','Branches'),('admin.users','Users'),('admin.roles','Role permissions'),('admin.audit_log','Audit log')] %}
+<a class="btn {{ '' if request.endpoint == ep or (ep == 'admin.branches' and request.endpoint == 'admin.branch_edit') or (ep == 'admin.users' and request.endpoint == 'admin.user_edit') else 'light' }} small" href="{{ url_for(ep) }}">{{ l }}</a>{% endfor %}</div>

@@ -1,0 +1,12 @@
+{% extends 'base.html' %}{% block title %}Branch{% endblock %}
+{% block content %}{% include 'admin/_tabs.html' %}
+<h1>{{ 'Edit branch ' ~ b.name if b else 'New branch' }}</h1>
+<form method="post" class="card">{{ csrf() }}<div class="grid">
+<div><label>Code * (short, e.g. BOLE)</label><input name="code" value="{{ f.code or (b.code if b else '') }}" maxlength="10" required></div>
+<div><label>Name *</label><input name="name" value="{{ f.name or (b.name if b else '') }}" required></div>
+<div class="wide"><label>Address</label><input name="address" value="{{ f.address or (b.address if b else '') }}"></div>
+<div><label>Phone</label><input name="phone" value="{{ f.phone or (b.phone if b else '') }}"></div>
+{% if not b or b.id != 1 %}<div><label><input type="checkbox" name="active" value="1" {{ 'checked' if (not b or b.active) }}> Active (open for work)</label></div>{% endif %}
+</div><div class="actions"><button>Save branch</button> <a class="btn light" href="{{ url_for('admin.branches') }}">Cancel</a></div></form>
+<p class="muted">The code appears in new document numbers of this branch, for example <code>{{ (b.code if b else 'BOLE') }}-S-000042</code>. A closed branch keeps its history but nobody can work in it.</p>
+{% endblock %}

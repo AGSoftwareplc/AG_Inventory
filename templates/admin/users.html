@@ -1,7 +1,7 @@
 {% extends 'base.html' %}{% block title %}Users{% endblock %}
 {% block content %}{% include 'admin/_tabs.html' %}
 <div class="head"><h1>Users</h1><a class="btn" href="{{ url_for('admin.user_edit') }}">+ New user</a></div>
-<div class="card tablewrap" style="padding:0"><table><tr><th>Username</th><th>Full name</th><th>Role</th><th>Status</th><th>Created</th></tr>
-{% for u in rows %}<tr><td><a href="{{ url_for('admin.user_edit', uid=u.id) }}">{{ u.username }}</a></td><td>{{ u.full_name }}</td><td>{{ u.role }}</td>
+<div class="card tablewrap" style="padding:0"><table><tr><th>Username</th><th>Full name</th><th>Role</th><th>Branches</th><th>Status</th><th>Created</th></tr>
+{% for u in rows %}<tr><td><a href="{{ url_for('admin.user_edit', uid=u.id) }}">{{ u.username }}</a></td><td>{{ u.full_name }}</td><td>{{ u.role }}</td><td>{{ 'All' if u.role == 'Administrator' else (u.branch_names or '') }}</td>
 <td><span class="badge {{ 'ok' if u.active else 'err' }}">{{ 'Active' if u.active else 'Deactivated' }}</span></td><td>{{ u.created_at }}</td></tr>{% endfor %}</table></div>
 {% endblock %}

@@ -42,6 +42,9 @@ DEFAULT_SETTINGS = {
     'shop_name': 'My Shop',
     'shop_address': '',
     'shop_phone': '',
+    'shop_email': '',
+    'shop_tin': '',
+    'logo_file': '',
     'currency': 'ETB',
     'payment_methods': 'Cash,Bank transfer,Mobile banking',
     'receipt_footer': 'Thank you for shopping with us!',
@@ -277,6 +280,15 @@ def create_business(name, code, admin_username, admin_name, admin_password):
     return bid
 
 
+def logo_path():
+    """Absolute path of the current business's logo file, or None."""
+    name = setting('logo_file')
+    if not name:
+        return None
+    path = os.path.join(os.path.dirname(os.path.abspath(platform_path())), 'logos', name)
+    return path if os.path.exists(path) else None
+
+
 def username_taken(username, business_id):
     """True if another business already uses this username."""
     r = get_platform().execute('SELECT business_id FROM logins WHERE username=?', (username,)).fetchone()
@@ -493,8 +505,28 @@ def use_business(bid):
     return b
 
 
+def user_branches(user):
+    """Branches this user may work in: all active ones for an administrator, else their assigned ones."""
+    db = get_db()
+    if user['role'] == ADMIN:
+        return db.execute('SELECT * FROM branches WHERE active=1 ORDER BY id').fetchall()
+    return db.execute('SELECT b.* FROM branches b JOIN user_branches ub ON ub.branch_id=b.id '
+                      'WHERE ub.user_id=? AND b.active=1 ORDER BY b.id', (user['id'],)).fetchall()
+
+
+def load_branch():
+    """The branch this user is working in (chosen in the top bar, remembered in the session)."""
+    g.branches = user_branches(g.user)
+    chosen = session.get('branch')
+    g.branch = next((b for b in g.branches if b['id'] == chosen), g.branches[0] if g.branches else None)
+
+
+def branch_id():
+    return g.branch['id'] if g.get('branch') else 1
+
+
 def load_user():
-    g.user, g.perms, g.business, g.is_super = None, set(), None, False
+    g.user, g.perms, g.business, g.is_super, g.branch, g.branches = None, set(), None, False, None, []
     uid, bid = session.get('uid'), session.get('bid', 1)
     if uid and use_business(bid):
         u = get_db().execute('SELECT * FROM users WHERE id=? AND active=1', (uid,)).fetchone()
@@ -505,6 +537,7 @@ def load_user():
             r = get_platform().execute('SELECT is_super FROM logins WHERE username=? AND business_id=?',
                                        (u['username'], bid)).fetchone()
             g.is_super = bool(r and r['is_super'])
+            load_branch()
             return
     if uid:
         session.clear()

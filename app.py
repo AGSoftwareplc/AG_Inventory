@@ -6,7 +6,7 @@ Run in the shop:      python serve.py   (uses the Waitress server)
 import os
 import secrets
 
-from flask import Blueprint, Flask, flash, g, redirect, render_template, request, session, url_for
+from flask import Blueprint, Flask, flash, g, redirect, render_template, request, send_file, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import core
@@ -59,6 +59,34 @@ def password():
             flash('Password changed.', 'ok')
             return redirect(url_for('dash.index'))
     return render_template('password.html')
+
+
+@auth.route('/branch', methods=['POST'])
+@login_required
+def switch_branch():
+    """Work in another branch (only one the user is assigned to)."""
+    bid = request.form.get('branch', type=int)
+    if any(b['id'] == bid for b in g.branches):
+        session['branch'] = bid
+    nxt = request.form.get('next', '')
+    return redirect(nxt if nxt.startswith('/') and not nxt.startswith('//') else url_for('dash.index'))
+
+
+@auth.route('/logo')
+@login_required
+def logo():
+    path = core.logo_path()
+    if not path:
+        return ('', 404)
+    with open(path, 'rb') as f:
+        data = f.read()
+    return app_response(data, path)
+
+
+def app_response(data, path):
+    from flask import Response
+    kind = 'image/png' if path.lower().endswith('.png') else 'image/jpeg'
+    return Response(data, mimetype=kind, headers={'Cache-Control': 'no-cache'})
 
 
 @auth.route('/manual')

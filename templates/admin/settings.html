@@ -1,15 +1,26 @@
 {% extends 'base.html' %}{% block title %}Settings{% endblock %}
 {% block content %}{% include 'admin/_tabs.html' %}
-<h1>Settings</h1>
-<form method="post" class="card">{{ csrf() }}<div class="grid">
-<div><label>Shop name</label><input name="shop_name" value="{{ setting('shop_name') }}"></div>
+<h1>Business profile &amp; settings</h1>
+<form method="post" class="card" enctype="multipart/form-data">{{ csrf() }}
+<h2 style="margin-top:0">Business profile <small class="muted">· shown on the top bar, receipts and printed reports</small></h2>
+<div class="grid">
+<div><label>Business name</label><input name="shop_name" value="{{ setting('shop_name') }}"></div>
 <div><label>Phone</label><input name="shop_phone" value="{{ setting('shop_phone') }}"></div>
+<div><label>Email</label><input name="shop_email" type="email" value="{{ setting('shop_email') }}"></div>
+<div><label>TIN / licence number</label><input name="shop_tin" value="{{ setting('shop_tin') }}"></div>
 <div class="wide"><label>Address</label><input name="shop_address" value="{{ setting('shop_address') }}"></div>
+<div class="wide logo-edit"><label>Logo (PNG or JPG, up to 1 MB)</label>
+  {% if setting('logo_file') %}<img src="{{ url_for('auth.logo') }}" alt="Current logo" class="logo-preview">
+  <label class="inline"><input type="checkbox" name="remove_logo" value="1"> Remove logo</label>{% endif %}
+  <input type="file" name="logo" accept=".png,.jpg,.jpeg,image/png,image/jpeg"></div>
+</div>
+<h2>Selling</h2>
+<div class="grid">
 <div><label>Currency</label><input name="currency" value="{{ setting('currency') }}"></div>
 <div class="wide"><label>Payment methods (comma separated)</label><input name="payment_methods" value="{{ setting('payment_methods') }}"></div>
 <div class="wide"><label>Receipt footer</label><input name="receipt_footer" value="{{ setting('receipt_footer') }}"></div>
 <div class="wide"><label><input type="checkbox" name="allow_negative" value="1" {{ 'checked' if setting('allow_negative') == '1' }}> Allow selling below zero stock (not recommended)</label></div>
-</div><div class="actions"><button>Save settings</button></div></form>
+</div><div class="actions"><button>Save</button></div></form>
 <div class="row">
 <div class="card"><h2 style="margin-top:0">Backup</h2>
 <p>A backup is made automatically once a day (the last 30 are kept) in:<br><code>{{ backup_dir }}</code></p>

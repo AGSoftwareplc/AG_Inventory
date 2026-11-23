@@ -6,7 +6,7 @@
   {% if can('sales_view') %}<a class="btn big light" href="{{ url_for('sales.view', sid=s.id) }}">Sale details</a>{% endif %}
 </div>
 <div class="receipt">
-  <div class="shophead"><h2>{{ setting('shop_name') }}</h2><div>{{ setting('shop_address') }}</div><div>{{ setting('shop_phone') }}</div></div>
+  {% include '_bizhead.html' %}
   <div class="grid" style="margin-bottom:1rem">
     <div><b>Receipt:</b> {{ s.receipt_no }}</div><div><b>Date:</b> {{ s.created_at }}</div>
     <div><b>Cashier:</b> {{ s.cashier }}</div><div><b>Customer:</b> {{ s.customer or 'Walk-in' }}</div>
