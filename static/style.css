@@ -20,6 +20,8 @@ h2 { font-size: 1.1rem; margin: 1.2rem 0 .6rem; }
 .top .spacer { flex: 1; }
 .top .user { white-space: nowrap; font-size: .9rem; }
 .top .user a { color: #fff; opacity: .9; margin-left: .5rem; }
+.adminlink { color: #fff; padding: .3rem .6rem; border: 1px solid rgba(255,255,255,.6); border-radius: 7px; white-space: nowrap; }
+.adminlink:hover, .adminlink.on { background: rgba(255,255,255,.18); text-decoration: none; }
 .helpbtn { background: #fff; color: var(--brand); border-color: #fff; padding: .3rem .7rem; }
 .helpbtn:hover { background: #e8f0f8; }
 .burger { display: none; color: #fff; font-size: 1.5rem; cursor: pointer; padding: 0 .3rem; }
@@ -27,13 +29,13 @@ body.app { display: grid; grid-template-columns: 220px minmax(0, 1fr); grid-temp
 body.app .top { grid-column: 1 / -1; }
 .side { background: #fff; border-right: 1px solid var(--line); padding: .6rem .5rem 2rem; position: sticky; top: 52px;
   height: calc(100vh - 52px); overflow-y: auto; }
-.side .group { margin-bottom: .6rem; }
+.side .group { margin-bottom: .35rem; }
 .side .gtitle { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted);
-  padding: .4rem .6rem .2rem; }
-.side a { display: block; padding: .42rem .7rem; border-radius: 7px; color: var(--text); }
+  padding: .3rem .6rem .1rem; }
+.side a { display: block; padding: .3rem .7rem; border-radius: 7px; color: var(--text); font-size: .94rem; }
 .side a:hover { background: #eef3f8; text-decoration: none; }
 .side a.on { background: #e1ecf7; color: var(--brand); font-weight: 600; }
-.side a.sell { background: var(--brand); color: #fff; font-weight: 700; text-align: center; padding: .65rem; margin-bottom: .3rem; }
+.side a.sell { background: var(--brand); color: #fff; font-weight: 700; text-align: center; padding: .55rem; margin-bottom: .2rem; }
 .side a.sell:hover, .side a.sell.on { background: var(--brand-dark); color: #fff; }
 .scrim { display: none; }
 .side .mobile-user { display: none; border-top: 1px solid var(--line); padding-top: .4rem; }

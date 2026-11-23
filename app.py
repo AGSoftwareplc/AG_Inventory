@@ -87,6 +87,7 @@ def create_app(database=None, testing=False):
         MAX_CONTENT_LENGTH=200 * 1024 * 1024,
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE='Lax',
+        SEND_FILE_MAX_AGE_DEFAULT=0,  # browsers re-check CSS/JS, so updates show without clearing the cache
     )
     core.init_db(app.config['DATABASE'])
 
