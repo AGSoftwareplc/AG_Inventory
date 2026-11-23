@@ -338,7 +338,8 @@ class ShopTest(unittest.TestCase):
         users = {r['username']: r['role'] for r in con.execute('SELECT username, role FROM users')}
         con.close()
         self.assertEqual(users, {'admin': 'Administrator', 'cashier': 'Sales Attendant',
-                                 'storekeeper': 'Inventory Manager'})
+                                 'storekeeper': 'Inventory Manager', 'cashier2': 'Sales Attendant',
+                                 'cashier3': 'Sales Attendant'})
         self.login('cashier', 'cashier123')
         self.assertIn(b'starter password for "cashier"', self.c.get('/').data)
         self.assertEqual(self.c.get('/sales/pos').status_code, 200)
@@ -352,6 +353,22 @@ class ShopTest(unittest.TestCase):
         con.close()
         create_app(self.dbfile, testing=True)
         self.assertIsNone(self.one("SELECT 1 FROM users WHERE username='cashier'"))
+        self.login('cashier3', 'sales333')
+        self.assertEqual(self.c.get('/sales/pos').status_code, 200)
+
+    def test_new_starter_users_added_to_existing_shop(self):
+        """A shop seeded with the first 3 starter users (v1.1) gets the extra cashiers once."""
+        con = self.db()
+        con.execute("DELETE FROM users WHERE username IN ('cashier2', 'cashier3')")
+        con.execute("UPDATE settings SET value='1' WHERE key='seeded_role_users'")
+        con.close()
+        create_app(self.dbfile, testing=True)
+        self.assertEqual(self.one("SELECT COUNT(*) FROM users WHERE role='Sales Attendant'")[0], 3)
+        con = self.db()
+        con.execute("DELETE FROM users WHERE username='cashier3'")
+        con.close()
+        create_app(self.dbfile, testing=True)
+        self.assertIsNone(self.one("SELECT 1 FROM users WHERE username='cashier3'"))
 
     def test_upgrade_old_database(self):
         """A database from version 1.0 (no expenses.reversal_of) is upgraded on start."""
