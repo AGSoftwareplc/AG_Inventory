@@ -1,0 +1,9 @@
+{% extends 'base.html' %}{% block title %}Suppliers{% endblock %}
+{% block content %}
+<div class="head"><h1>Suppliers</h1>{% if can('suppliers') %}<a class="btn" href="{{ url_for('contacts.supplier_edit') }}">+ New supplier</a>{% endif %}</div>
+<form class="filters"><div class="grow"><label>Search name or phone</label><input name="q" value="{{ q }}"></div><div style="flex:0"><button>Search</button></div></form>
+<div class="card tablewrap" style="padding:0"><table><tr><th>Name</th><th>Contact person</th><th>Phone</th><th>Status</th><th class="n">We owe</th></tr>
+{% for r in rows %}<tr><td><a href="{{ url_for('contacts.supplier', rid=r.id) }}">{{ r.name }}</a></td><td>{{ r.contact_person }}</td><td>{{ r.phone }}</td>
+<td>{{ 'Active' if r.active else 'Inactive' }}</td><td class="n">{{ r.owed|money if r.owed }}</td></tr>
+{% else %}<tr><td colspan="5" class="muted">No suppliers.</td></tr>{% endfor %}</table></div>
+{% endblock %}

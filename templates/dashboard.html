@@ -1,0 +1,32 @@
+{% extends 'base.html' %}{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="head"><h1>Dashboard</h1>
+<form class="filters noprint" style="margin:0">{% include '_range.html' %}<div style="flex:0"><button>Show</button></div></form></div>
+<p class="muted">{{ 'Today' if start == end and start == today else start ~ ' to ' ~ end }}</p>
+<div class="tiles">
+  {% if show_money %}
+  <div class="tile"><div class="k">Net sales</div><div class="v">{{ p.net_sales|money }}</div><div class="muted">{{ p.sales_count }} sales</div></div>
+  <div class="tile"><div class="k">Purchases</div><div class="v">{{ d.purchases|money }}</div></div>
+  <div class="tile"><div class="k">Expenses</div><div class="v">{{ p.expenses|money }}</div></div>
+  <div class="tile {{ 'good' if p.gross_profit >= 0 else 'bad' }}"><div class="k">Gross profit</div><div class="v">{{ p.gross_profit|money }}</div></div>
+  <div class="tile {{ 'good' if p.net_profit >= 0 else 'bad' }}"><div class="k">Est. net operating profit</div><div class="v">{{ p.net_profit|money }}</div></div>
+  <div class="tile"><div class="k">Stock value (at cost)</div><div class="v">{{ d.stock_value|money }}</div></div>
+  {% else %}
+  <div class="tile"><div class="k">Sales</div><div class="v">{{ p.sales_count }}</div></div>
+  {% endif %}
+  <div class="tile"><div class="k">Active products</div><div class="v">{{ d.products }}</div></div>
+  <div class="tile {{ 'bad' if low }}"><div class="k">Low-stock products</div><div class="v">{{ low|length }}{{ '+' if low|length == 15 }}</div></div>
+</div>
+<div class="row">
+  <div class="card"><h2 style="margin-top:0">Low stock</h2>
+    {% if low %}<div class="tablewrap"><table><tr><th>Product</th><th class="n">Stock</th><th class="n">Min</th></tr>
+    {% for r in low %}<tr class="low"><td>{% if can('products') or can('inventory') %}<a href="{{ url_for('products.view', pid=r.id) }}">{{ r.name }}</a>{% else %}{{ r.name }}{% endif %}</td><td class="n">{{ r.stock|qty }} {{ r.unit }}</td><td class="n">{{ r.min_stock|qty }}</td></tr>{% endfor %}
+    </table></div>{% else %}<p class="muted">All products are above their minimum level.</p>{% endif %}
+  </div>
+  <div class="card"><h2 style="margin-top:0">Best-selling products</h2>
+    {% if best %}<div class="tablewrap"><table><tr><th>Product</th><th class="n">Qty</th>{% if show_money %}<th class="n">Value</th>{% endif %}</tr>
+    {% for r in best %}<tr><td>{{ r.name }}</td><td class="n">{{ r.q|qty }} {{ r.unit }}</td>{% if show_money %}<td class="n">{{ r.v|money }}</td>{% endif %}</tr>{% endfor %}
+    </table></div>{% else %}<p class="muted">No sales in this period.</p>{% endif %}
+  </div>
+</div>
+{% endblock %}

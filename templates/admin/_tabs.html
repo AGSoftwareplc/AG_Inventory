@@ -1,0 +1,3 @@
+<div class="actions noprint" style="margin:0 0 1rem">
+{% for ep, l in [('admin.users','Users'),('admin.roles','Role permissions'),('admin.settings','Settings & backup'),('admin.audit_log','Audit log')] %}
+<a class="btn {{ '' if request.endpoint == ep else 'light' }} small" href="{{ url_for(ep) }}">{{ l }}</a>{% endfor %}</div>

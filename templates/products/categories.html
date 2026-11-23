@@ -1,0 +1,10 @@
+{% extends 'base.html' %}{% block title %}Categories{% endblock %}
+{% block content %}
+<div class="head"><h1>Product categories</h1><a class="btn light" href="{{ url_for('products.index') }}">Back to products</a></div>
+<form method="post" class="card filters">{{ csrf() }}<div class="grow"><label>New category</label><input name="name" required></div><div style="flex:0"><button>Add</button></div></form>
+<div class="card tablewrap" style="padding:0"><table><tr><th>Name</th><th class="n">Products</th><th>Status / rename</th></tr>
+{% for c in rows %}<tr><td>{{ c.name }}</td><td class="n">{{ c.n }}</td>
+<td><form method="post" class="filters" style="margin:0">{{ csrf() }}<input type="hidden" name="id" value="{{ c.id }}">
+<div class="grow"><input name="name" value="{{ c.name }}"></div><div><label><input type="checkbox" name="active" value="1" {{ 'checked' if c.active }}> Active</label></div><div style="flex:0"><button class="small light">Save</button></div></form></td></tr>
+{% else %}<tr><td colspan="3" class="muted">No categories yet.</td></tr>{% endfor %}</table></div>
+{% endblock %}

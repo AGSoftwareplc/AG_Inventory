@@ -1,0 +1,9 @@
+{% extends 'base.html' %}{% block title %}Role permissions{% endblock %}
+{% block content %}{% include 'admin/_tabs.html' %}
+<h1>Role permissions</h1>
+<p class="muted">Tick what each role may do. The Administrator role always has every permission plus Users, Settings and Backup.</p>
+<form method="post">{{ csrf() }}<div class="card tablewrap" style="padding:0"><table>
+<tr><th>Permission</th>{% for r in roles %}<th style="text-align:center">{{ r }}</th>{% endfor %}</tr>
+{% for p, label in perms.items() %}<tr><td>{{ label }}</td>{% for r in roles %}<td style="text-align:center"><input type="checkbox" name="{{ r }}|{{ p }}" value="1" {{ 'checked' if (r, p) in have }}></td>{% endfor %}</tr>{% endfor %}
+</table></div><div class="actions"><button>Save permissions</button></div></form>
+{% endblock %}

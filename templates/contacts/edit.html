@@ -1,0 +1,9 @@
+{% extends 'base.html' %}{% block title %}{{ kind }}{% endblock %}
+{% block content %}
+<h1>{{ ('Edit ' ~ kind|lower ~ ': ' ~ r.name) if r else 'New ' ~ kind|lower }}</h1>
+<form method="post" class="card">{{ csrf() }}<div class="grid">
+{% for k in fields %}<div class="{{ 'wide' if k in ('description','notes','address') }}"><label>{{ k|replace('_',' ')|capitalize }}{{ ' *' if k == 'name' }}{{ ' (optional)' if k in ('email','description','notes','address') }}</label>
+<input name="{{ k }}" value="{{ request.form.get(k) or (r[k] if r else '') }}" {{ 'required' if k == 'name' }} {{ 'type=email' if k == 'email' }}></div>{% endfor %}
+{% if has_active and r %}<div><label><input type="checkbox" name="active" value="1" {{ 'checked' if r.active }}> Active</label></div>{% endif %}
+</div><div class="actions"><button>Save</button> <a class="btn light" href="{{ url_for('contacts.suppliers' if kind == 'Supplier' else 'contacts.customers') }}">Cancel</a></div></form>
+{% endblock %}

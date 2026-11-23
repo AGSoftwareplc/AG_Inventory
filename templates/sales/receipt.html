@@ -1,0 +1,27 @@
+{% extends 'base.html' %}{% block title %}Receipt {{ s.receipt_no }}{% endblock %}
+{% block content %}
+<div class="actions noprint" style="justify-content:center;margin:0 0 1rem">
+  <button onclick="window.print()" class="big" id="printbtn">Print receipt</button>
+  {% if can('pos') %}<a class="btn big light" href="{{ url_for('sales.pos') }}">New sale</a>{% endif %}
+  {% if can('sales_view') %}<a class="btn big light" href="{{ url_for('sales.view', sid=s.id) }}">Sale details</a>{% endif %}
+</div>
+<div class="receipt">
+  <div class="shophead"><h2>{{ setting('shop_name') }}</h2><div>{{ setting('shop_address') }}</div><div>{{ setting('shop_phone') }}</div></div>
+  <div class="grid" style="margin-bottom:1rem">
+    <div><b>Receipt:</b> {{ s.receipt_no }}</div><div><b>Date:</b> {{ s.created_at }}</div>
+    <div><b>Cashier:</b> {{ s.cashier }}</div><div><b>Customer:</b> {{ s.customer or 'Walk-in' }}</div>
+  </div>
+  {% if s.status == 'Cancelled' %}<div class="flash error">CANCELLED: {{ s.cancel_reason }}</div>{% endif %}
+  <table><tr><th>Item</th><th class="n">Qty</th><th class="n">Price</th><th class="n">Total</th></tr>
+  {% for i in items %}<tr><td>{{ i.name }}</td><td class="n">{{ i.qty|qty }} {{ i.unit }}</td><td class="n">{{ i.price|money }}</td><td class="n">{{ (i.qty*i.price)|money }}</td></tr>{% endfor %}
+  <tr><td colspan="3" class="n">Subtotal</td><td class="n">{{ s.subtotal|money }}</td></tr>
+  {% if s.discount %}<tr><td colspan="3" class="n">Discount</td><td class="n">−{{ s.discount|money }}</td></tr>{% endif %}
+  <tr class="total"><td colspan="3" class="n">TOTAL ({{ currency }})</td><td class="n">{{ s.total|money }}</td></tr>
+  <tr><td colspan="3" class="n">Paid ({{ s.method }})</td><td class="n">{{ s.tendered|money }}</td></tr>
+  {% if s.change_due %}<tr><td colspan="3" class="n">Change</td><td class="n">{{ s.change_due|money }}</td></tr>{% endif %}
+  {% if s.total - s.paid > 0 %}<tr><td colspan="3" class="n">Balance owed</td><td class="n">{{ (s.total - s.paid)|money }}</td></tr>{% endif %}
+  </table>
+  <p style="text-align:center;margin-top:1.2rem">{{ setting('receipt_footer') }}</p>
+</div>
+{% endblock %}
+{% block scripts %}{% if new %}<script>document.getElementById('printbtn').focus();</script>{% endif %}{% endblock %}

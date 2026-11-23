@@ -1,0 +1,38 @@
+{% extends 'base.html' %}{% block title %}POS{% endblock %}
+{% block content %}
+<div class="pos">
+  <div>
+    <div class="card">
+      <input id="search" placeholder="Scan barcode or type product name / code, then Enter" autocomplete="off" autofocus>
+      <div class="results" id="results" hidden></div>
+    </div>
+    <div class="card tablewrap cart" style="padding:0"><table id="cart">
+      <thead><tr><th>Product</th><th class="n">Price</th><th class="n">Qty</th><th class="n">Total</th><th></th></tr></thead>
+      <tbody></tbody></table>
+      <p class="muted" id="empty" style="padding:1rem">Cart is empty. Scan or search for a product.</p>
+    </div>
+  </div>
+  <form method="post" action="{{ url_for('sales.checkout') }}" class="card paybox" id="payform">{{ csrf() }}{{ once() }}
+    <input type="hidden" name="items" id="items">
+    <div class="line"><span>Subtotal</span><b id="sub">0.00</b></div>
+    {% if allow_discount %}
+    <div class="line" style="gap:.4rem"><input name="discount" id="disc" inputmode="decimal" placeholder="Discount">
+      <select name="discount_type" id="dtype" style="width:90px"><option value="amt">{{ currency }}</option><option value="pct">%</option></select></div>
+    {% endif %}
+    <div class="line"><span>Discount</span><span id="discv">0.00</span></div>
+    <div class="line grand"><span>Total</span><span id="grand">0.00</span></div>
+    <p><label>Payment method</label><select name="method">{% for m in methods %}<option>{{ m }}</option>{% endfor %}</select></p>
+    <p><label>Amount paid ({{ currency }})</label><input name="tendered" id="tendered" inputmode="decimal" style="font-size:1.3rem"></p>
+    <div class="line"><span>Change</span><span class="chg" id="change">0.00</span></div>
+    <div class="line muted" id="duebox" hidden><span>Still owed (credit)</span><span id="due"></span></div>
+    <p><label>Customer</label><select name="customer_id" id="cust"><option value="">Walk-in customer</option>
+      {% for c in customers %}<option value="{{ c.id }}">{{ c.name }}{{ ' · ' ~ c.phone if c.phone }}</option>{% endfor %}</select></p>
+    <button class="big" style="width:100%" id="paybtn">Complete sale</button>
+    <p class="muted" style="font-size:.85rem">Tip: Enter adds the first match. Leave "Amount paid" empty to take the exact total.</p>
+  </form>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>var POS = {search: "{{ url_for('sales.api_products') }}"};</script>
+<script src="{{ url_for('static', filename='pos.js') }}"></script>
+{% endblock %}

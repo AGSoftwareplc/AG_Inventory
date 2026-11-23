@@ -1,0 +1,12 @@
+{% extends 'base.html' %}{% block title %}Stocktake{% endblock %}
+{% block content %}
+<div class="head"><h1>Stocktaking</h1><a class="btn light" href="{{ url_for('inventory.index') }}">Back to inventory</a></div>
+<form method="post" class="card filters">{{ csrf() }}
+  <div><label>Count which products</label><select name="category_id"><option value="">All active products</option>{% for c in cats %}<option value="{{ c.id }}">Category: {{ c.name }}</option>{% endfor %}</select></div>
+  <div class="grow"><label>Notes</label><input name="notes" placeholder="e.g. Month-end count"></div>
+  <div style="flex:0"><button>Start new count</button></div></form>
+<div class="card tablewrap" style="padding:0"><table><tr><th>No.</th><th>Date</th><th>Notes</th><th class="n">Products</th><th>Status</th><th>By</th></tr>
+{% for s in rows %}<tr><td><a href="{{ url_for('inventory.stocktake', st_id=s.id) }}">ST-{{ s.id }}</a></td><td>{{ s.date }}</td><td>{{ s.notes }}</td><td class="n">{{ s.n }}</td>
+<td><span class="badge {{ 'ok' if s.status == 'Posted' else 'warn' }}">{{ s.status }}</span></td><td>{{ s.username }}</td></tr>
+{% else %}<tr><td colspan="6" class="muted">No stocktakes yet.</td></tr>{% endfor %}</table></div>
+{% endblock %}

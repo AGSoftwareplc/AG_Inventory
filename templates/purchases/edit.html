@@ -1,0 +1,58 @@
+{% extends 'base.html' %}{% block title %}{{ 'Edit ' ~ pur.ref_no if pur else 'New purchase' }}{% endblock %}
+{% block content %}
+<h1>{{ 'Edit draft ' ~ pur.ref_no if pur else 'New purchase' }}</h1>
+{% if not sups %}<div class="flash warn">Add a supplier first: <a href="{{ url_for('contacts.supplier_edit') }}">New supplier</a></div>{% endif %}
+<form method="post" id="pf">{{ csrf() }}{{ once() }}
+<div class="card grid">
+  <div><label>Supplier *</label><select name="supplier_id" required><option value="">Choose…</option>
+    {% for s in sups %}<option value="{{ s.id }}" {{ 'selected' if pur and pur.supplier_id == s.id }}>{{ s.name }}</option>{% endfor %}</select></div>
+  <div><label>Purchase date</label><input type="date" name="date" value="{{ pur.date if pur else today }}"></div>
+  <div class="wide"><label>Notes</label><input name="notes" value="{{ pur.notes if pur else '' }}"></div>
+</div>
+<div class="card tablewrap">
+<table id="lines"><tr><th>Product</th><th class="n">Quantity</th><th class="n">Unit cost ({{ currency }})</th><th class="n">Line total</th><th></th></tr></table>
+<div class="actions"><button type="button" class="light small" onclick="addLine()">+ Add line</button></div>
+<div class="grid" style="margin-top:1rem;max-width:520px;margin-left:auto">
+  <div><label>Discount ({{ currency }})</label><input name="discount" id="disc" inputmode="decimal" value="{{ pur.discount|money_input if pur else '' }}"></div>
+  <div><label>Total</label><input id="tot" disabled></div>
+</div>
+</div>
+<div class="actions"><button name="save" value="1" class="light">Save as draft</button>
+<button name="confirm" value="1">Save and confirm order</button>
+<a class="btn light" href="{{ url_for('purchases.index') }}">Cancel</a></div>
+<p class="muted">A draft does not affect stock. After confirming, use "Receive" on the purchase page when goods arrive.</p>
+</form>
+<template id="tpl"><tr>
+  <td><select name="pid" onchange="pick(this)" style="min-width:220px"><option value="">Choose product…</option>
+  {% for p in products %}<option value="{{ p.id }}" data-cost="{{ p.avg_cost|money_input }}">{{ p.name }} ({{ p.code }}, {{ p.unit }})</option>{% endfor %}</select></td>
+  <td class="n"><input name="qty" inputmode="decimal" style="width:100px;text-align:right" oninput="calc()"></td>
+  <td class="n"><input name="cost" inputmode="decimal" style="width:120px;text-align:right" oninput="calc()"></td>
+  <td class="n lt"></td><td><button type="button" class="x" onclick="this.closest('tr').remove();calc()">×</button></td></tr></template>
+{% endblock %}
+{% block scripts %}<script>
+var existing = [{% for i in items %}[{{ i.product_id }}, "{{ i.qty }}", "{{ i.unit_cost|money_input }}"],{% endfor %}];
+function addLine(pid, q, c) {
+  var row = document.getElementById('tpl').content.firstElementChild.cloneNode(true);
+  document.getElementById('lines').appendChild(row);
+  if (pid) { row.querySelector('select').value = pid; row.querySelector('[name=qty]').value = q; row.querySelector('[name=cost]').value = c; }
+  calc(); return row;
+}
+function pick(sel) {
+  var cost = sel.closest('tr').querySelector('[name=cost]');
+  if (!cost.value) cost.value = sel.selectedOptions[0].dataset.cost || '';
+  calc();
+}
+function num(v) { v = parseFloat(String(v || '').replace(/,/g, '')); return isNaN(v) ? 0 : v; }
+function fmt(v) { return v.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
+function calc() {
+  var sum = 0;
+  document.querySelectorAll('#lines tr').forEach(function (tr) {
+    var q = tr.querySelector('[name=qty]'); if (!q) return;
+    var t = num(q.value) * num(tr.querySelector('[name=cost]').value);
+    tr.querySelector('.lt').textContent = fmt(t); sum += t;
+  });
+  document.getElementById('tot').value = fmt(sum - num(document.getElementById('disc').value));
+}
+document.getElementById('disc').addEventListener('input', calc);
+if (existing.length) existing.forEach(function (l) { addLine(l[0], l[1], l[2]); }); else { addLine(); addLine(); addLine(); }
+</script>{% endblock %}

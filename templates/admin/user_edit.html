@@ -1,0 +1,12 @@
+{% extends 'base.html' %}{% block title %}User{% endblock %}
+{% block content %}{% include 'admin/_tabs.html' %}
+<h1>{{ 'Edit user ' ~ u.username if u else 'New user' }}</h1>
+<form method="post" class="card">{{ csrf() }}<div class="grid">
+<div><label>Username *</label><input name="username" value="{{ f.username or (u.username if u else '') }}" required></div>
+<div><label>Full name *</label><input name="full_name" value="{{ f.full_name or (u.full_name if u else '') }}" required></div>
+<div><label>Role *</label><select name="role">{% for r in roles %}<option {{ 'selected' if (f.role or (u.role if u else 'Sales Attendant')) == r }}>{{ r }}</option>{% endfor %}</select></div>
+<div><label>{{ 'New password (leave empty to keep)' if u else 'Password * (6+ characters)' }}</label><input type="password" name="password" autocomplete="new-password" {{ '' if u else 'required' }}></div>
+<div><label><input type="checkbox" name="active" value="1" {{ 'checked' if (not u or u.active) }}> Active (can log in)</label></div>
+</div><div class="actions"><button>Save user</button> <a class="btn light" href="{{ url_for('admin.users') }}">Cancel</a></div></form>
+<p class="muted">What each role may do is set under <a href="{{ url_for('admin.roles') }}">Role permissions</a>. Administrators can do everything.</p>
+{% endblock %}

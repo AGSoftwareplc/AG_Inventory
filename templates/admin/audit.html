@@ -1,0 +1,6 @@
+{% extends 'base.html' %}{% block title %}Audit log{% endblock %}
+{% block content %}{% include 'admin/_tabs.html' %}
+<h1>Audit log <span class="muted" style="font-size:.9rem">(latest 500)</span></h1>
+<div class="card tablewrap" style="padding:0"><table><tr><th>Time</th><th>User</th><th>Action</th><th>Details</th></tr>
+{% for a in rows %}<tr><td>{{ a.at }}</td><td>{{ a.username or '' }}</td><td>{{ a.action|replace('_',' ') }}</td><td>{{ a.details }}</td></tr>{% endfor %}</table></div>
+{% endblock %}
