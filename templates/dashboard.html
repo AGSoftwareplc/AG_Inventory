@@ -1,22 +1,25 @@
 {% extends 'base.html' %}{% block title %}Dashboard{% endblock %}
 {% block content %}
 {% if weak %}<div class="flash error">Security: you are still using the starter password for "{{ g.user.username }}". <a href="{{ url_for('auth.password') }}">Change it now</a>.</div>{% endif %}
-<div class="head"><h1>Dashboard</h1>
-<form class="filters noprint" style="margin:0">{% if branch_opts %}<div><label>Branch</label><select name="branch" onchange="this.form.submit()">{% for v, label, sel in branch_opts %}<option value="{{ v }}" {{ 'selected' if sel }}>{{ label }}</option>{% endfor %}</select></div>{% endif %}{% include '_range.html' %}<div style="flex:0"><button>Show</button></div></form></div>
-<p class="muted">{% if branch_opts %}{{ branch_name }} · {% endif %}{{ 'Today' if start == end and start == today else start ~ ' to ' ~ end }}</p>
-<div class="tiles">
+<form class="dashbar noprint">
+  {% if branch_opts %}<div><label>Branch</label><select name="branch" onchange="this.form.submit()">{% for v, label, sel in branch_opts %}<option value="{{ v }}" {{ 'selected' if sel }}>{{ label }}</option>{% endfor %}</select></div>{% endif %}
+  {% include '_range.html' %}
+  <div><button>Show</button></div>
+  <div class="when muted">{% if branch_opts %}{{ branch_name }} · {% endif %}{{ 'Today' if start == end and start == today else start ~ ' to ' ~ end }}</div>
+</form>
+<div class="tiles dash{{ ' four' if show_money }}">
   {% if show_money %}
-  <div class="tile"><div class="k">Net sales</div><div class="v">{{ p.net_sales|money }}</div><div class="muted">{{ p.sales_count }} sales</div></div>
-  <div class="tile"><div class="k">Purchases</div><div class="v">{{ d.purchases|money }}</div></div>
-  <div class="tile"><div class="k">Expenses</div><div class="v">{{ p.expenses|money }}</div></div>
-  <div class="tile {{ 'good' if p.gross_profit >= 0 else 'bad' }}"><div class="k">Gross profit</div><div class="v">{{ p.gross_profit|money }}</div></div>
-  <div class="tile {{ 'good' if p.net_profit >= 0 else 'bad' }}"><div class="k">Est. net operating profit</div><div class="v">{{ p.net_profit|money }}</div></div>
-  <div class="tile"><div class="k">Stock value (at cost)</div><div class="v">{{ d.stock_value|money }}</div></div>
+  <div class="tile t-sell"><div class="k">Net sales</div><div class="v">{{ p.net_sales|money }}</div><div class="muted">{{ p.sales_count }} sales</div></div>
+  <div class="tile t-buy"><div class="k">Purchases</div><div class="v">{{ d.purchases|money }}</div></div>
+  <div class="tile t-money"><div class="k">Expenses</div><div class="v">{{ p.expenses|money }}</div></div>
+  <div class="tile t-money {{ 'good' if p.gross_profit >= 0 else 'bad' }}"><div class="k">Gross profit</div><div class="v">{{ p.gross_profit|money }}</div></div>
+  <div class="tile t-money {{ 'good' if p.net_profit >= 0 else 'bad' }}"><div class="k">Est. net operating profit</div><div class="v">{{ p.net_profit|money }}</div></div>
+  <div class="tile t-stock"><div class="k">Stock value (at cost)</div><div class="v">{{ d.stock_value|money }}</div></div>
   {% else %}
-  <div class="tile"><div class="k">Sales</div><div class="v">{{ p.sales_count }}</div></div>
+  <div class="tile t-sell"><div class="k">Sales</div><div class="v">{{ p.sales_count }}</div></div>
   {% endif %}
-  <div class="tile"><div class="k">Active products</div><div class="v">{{ d.products }}</div></div>
-  <div class="tile {{ 'bad' if low }}"><div class="k">Low-stock products</div><div class="v">{{ low|length }}{{ '+' if low|length == 15 }}</div></div>
+  <div class="tile t-stock"><div class="k">Active products</div><div class="v">{{ d.products }}</div></div>
+  <div class="tile t-low {{ 'bad' if low }}"><div class="k">Low-stock products</div><div class="v">{{ low|length }}{{ '+' if low|length == 15 }}</div></div>
 </div>
 {% macro ring(c, title, empty) %}
 <div class="card chart"><h2>{{ title }}</h2>

@@ -158,6 +158,22 @@ tr.low td { background: #fff8e6; }
 .tile .k { color: var(--muted); font-size: .82rem; }
 .tile .v { font-size: 1.45rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .tile.good .v { color: var(--ok); } .tile.bad .v { color: var(--err); }
+/* dashboard: one compact filter row, and summary cards in the menu's brand colours */
+.dashbar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .5rem .8rem; background: #fff; border: 1px solid var(--line);
+  border-radius: 10px; padding: .55rem .8rem; margin-bottom: .8rem; }
+.dashbar > div { flex: 0 1 170px; }
+.dashbar > div:has(button) { flex: 0 0 auto; }
+.dashbar label { font-size: .78rem; margin-bottom: .15rem; }
+.dashbar .when { flex: 1 1 160px; text-align: right; align-self: center; font-size: .88rem; }
+.tiles.dash.four { grid-template-columns: repeat(4, 1fr); }
+.tiles.dash .tile { border-left: 5px solid var(--tc, var(--line)); background: var(--tb, #fff); }
+.tiles.dash .tile .k { color: var(--tc, var(--muted)); font-weight: 600; text-transform: uppercase; letter-spacing: .03em; font-size: .74rem; }
+.tile.t-sell { --tc: #13795b; --tb: #ecf7f2; }
+.tile.t-buy { --tc: #c2410c; --tb: #fdf1ea; }
+.tile.t-money { --tc: #6d3fc8; --tb: #f4effc; }
+.tile.t-stock { --tc: #1d63b8; --tb: #edf3fb; }
+.tile.t-low { --tc: #b45309; --tb: #fdf6e7; }
+@media (max-width: 900px) { .tiles.dash.four { grid-template-columns: repeat(2, 1fr); } .dashbar > div { flex: 1 1 130px; } .dashbar .when { text-align: left; flex-basis: 100%; } }
 
 /* dashboard charts: plain SVG/HTML, colours in fixed order (blue, orange, aqua, yellow; grey = other) */
 :root { --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --other: #9aa5b1; }
