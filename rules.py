@@ -3,7 +3,7 @@
 All functions expect to run inside core.tx() so each operation is all-or-nothing.
 Money is in integer cents; quantities are floats rounded to 3 decimals.
 """
-from core import RuleError, audit, next_no, rnd, setting, fmt_qty
+from core import RuleError, audit, branch_id, next_no, products_select, rnd, setting, fmt_qty
 
 EPS = 1e-9
 OUT_TYPES = {'damaged': 'Damaged', 'expired': 'Expired', 'lost': 'Lost'}
@@ -12,6 +12,8 @@ MOVE_LABELS = {
     'lost': 'Lost', 'correction': 'Stock correction', 'sale_return': 'Customer return',
     'purchase_return': 'Supplier return', 'sale_cancel': 'Sale cancellation',
     'stocktake': 'Stocktake correction', 'opening': 'Opening stock',
+    'transfer_out': 'Transfer sent', 'transfer_in': 'Transfer received',
+    'transfer_cancel': 'Transfer cancelled',
 }
 
 
@@ -19,8 +21,9 @@ def _q(x):
     return round(x, 3)
 
 
-def product(db, pid):
-    p = db.execute('SELECT * FROM products WHERE id=?', (pid,)).fetchone()
+def product(db, pid, branch=None):
+    """A product with the stock and average cost of one branch (default: the user's branch)."""
+    p = db.execute(products_select(db, '?') + ' WHERE p.id=?', (branch or branch_id(), pid)).fetchone()
     if not p:
         raise RuleError('Product not found.')
     return p
@@ -28,14 +31,15 @@ def product(db, pid):
 
 # ---------------------------------------------------------------- core stock movement
 def move_stock(db, pid, qty, move_type, uid, ref_type='', ref_id=None, ref_no='', reason='',
-               in_cost=None):
-    """Change stock of one product and record the movement.
+               in_cost=None, branch=None):
+    """Change stock of one product at one branch (default: the user's branch) and record the movement.
 
     qty > 0 with in_cost: stock comes in at in_cost -> weighted average cost is recalculated.
     qty < 0 with in_cost: stock goes back to supplier at in_cost -> average recalculated on the rest.
     Otherwise stock moves at the current average cost and the average does not change.
     """
-    p = product(db, pid)
+    branch = branch or branch_id()
+    p = product(db, pid, branch)
     qty = _q(qty)
     old_stock, avg = p['stock'], p['avg_cost']
     new_stock = _q(old_stock + qty)
@@ -51,10 +55,14 @@ def move_stock(db, pid, qty, move_type, uid, ref_type='', ref_id=None, ref_no=''
         if new_stock > EPS:
             avg = max(0.0, (old_stock * avg + qty * in_cost) / new_stock)
     unit_cost = in_cost if in_cost is not None else p['avg_cost']
-    db.execute('UPDATE products SET stock=?, avg_cost=? WHERE id=?', (new_stock, avg, pid))
+    db.execute('INSERT INTO product_stock(product_id, branch_id, stock, avg_cost) VALUES (?,?,?,?) '
+               'ON CONFLICT(product_id, branch_id) DO UPDATE SET stock=excluded.stock, avg_cost=excluded.avg_cost',
+               (pid, branch, new_stock, avg))
+    # products keeps the total over all branches, and the latest cost for branches without stock yet
+    db.execute('UPDATE products SET stock=ROUND(stock+?, 3), avg_cost=? WHERE id=?', (qty, avg, pid))
     db.execute('INSERT INTO stock_moves(product_id, qty, move_type, ref_type, ref_id, ref_no, '
-               'unit_cost, balance, reason, user_id) VALUES (?,?,?,?,?,?,?,?,?,?)',
-               (pid, qty, move_type, ref_type, ref_id, ref_no, unit_cost, new_stock, reason, uid))
+               'unit_cost, balance, reason, user_id, branch_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+               (pid, qty, move_type, ref_type, ref_id, ref_no, unit_cost, new_stock, reason, uid, branch))
     return new_stock
 
 
@@ -108,8 +116,8 @@ def save_purchase(db, pur_id, supplier_id, date, discount, notes, lines, uid):
     else:
         ref = next_no(db, 'P', 'purchases', 'ref_no')
         cur = db.execute('INSERT INTO purchases(ref_no, supplier_id, date, discount, total, notes, '
-                         'user_id) VALUES (?,?,?,?,?,?,?)',
-                         (ref, supplier_id, date, discount, total, notes, uid))
+                         'user_id, branch_id) VALUES (?,?,?,?,?,?,?,?)',
+                         (ref, supplier_id, date, discount, total, notes, uid, branch_id()))
         pur_id = cur.lastrowid
     for pid, q, c in lines:
         product(db, pid)
@@ -176,7 +184,7 @@ def receive_purchase(db, pur_id, receipts, uid):
             raise RuleError(f"{p['name']}: only {fmt_qty(left)} left to receive.")
         db.execute('UPDATE purchase_items SET received_qty=received_qty+? WHERE id=?', (q, item_id))
         move_stock(db, it['product_id'], q, 'purchase', uid, 'purchase', pur_id, pur['ref_no'],
-                   in_cost=net_unit_cost(it, pur, gross))
+                   in_cost=net_unit_cost(it, pur, gross), branch=pur['branch_id'])
         done += 1
     if not done:
         raise RuleError('Enter a quantity to receive.')
@@ -197,13 +205,13 @@ def purchase_return(db, pur_id, item_id, qty, reason, uid, date):
     cost = net_unit_cost(it, pur, purchase_gross(db, pur_id))
     credit = rnd(qty * cost)
     move_stock(db, it['product_id'], -qty, 'purchase_return', uid, 'purchase', pur_id,
-               pur['ref_no'], reason=reason.strip(), in_cost=cost)
+               pur['ref_no'], reason=reason.strip(), in_cost=cost, branch=pur['branch_id'])
     db.execute('UPDATE purchase_items SET returned_qty=returned_qty+? WHERE id=?', (qty, item_id))
     db.execute('UPDATE purchases SET returned_value=returned_value+? WHERE id=?', (credit, pur_id))
     db.execute('INSERT INTO returns(kind, doc_id, item_id, product_id, qty, amount, cost, reason, '
-               'date, user_id) VALUES (?,?,?,?,?,?,?,?,?,?)',
+               'date, user_id, branch_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
                ('purchase', pur_id, item_id, it['product_id'], qty, credit, cost, reason.strip(),
-                date, uid))
+                date, uid, pur['branch_id']))
     audit('purchase_return', f"{pur['ref_no']} item {item_id} qty {qty}", db)
     return credit
 
@@ -266,9 +274,9 @@ def create_sale(db, lines, discount, tendered, method, customer_id, uid, date,
     change = max(0, tendered - total)
     receipt = next_no(db, 'S', 'sales', 'receipt_no')
     sid = db.execute('INSERT INTO sales(receipt_no, customer_id, date, subtotal, discount, total, '
-                     'paid, tendered, change_due, method, user_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+                     'paid, tendered, change_due, method, user_id, branch_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
                      (receipt, customer_id, date, subtotal, discount, total, paid, tendered,
-                      change, method, uid)).lastrowid
+                      change, method, uid, branch_id())).lastrowid
     for p, q in items:
         db.execute('INSERT INTO sale_items(sale_id, product_id, qty, price, cost) VALUES (?,?,?,?,?)',
                    (sid, p['id'], q, p['price'], p['avg_cost']))
@@ -307,13 +315,13 @@ def sale_return(db, sid, item_id, qty, reason, uid, date):
     factor = s['total'] / s['subtotal'] if s['subtotal'] else 1
     refund = rnd(qty * it['price'] * factor)
     move_stock(db, it['product_id'], qty, 'sale_return', uid, 'sale', sid, s['receipt_no'],
-               reason=reason.strip(), in_cost=it['cost'])
+               reason=reason.strip(), in_cost=it['cost'], branch=s['branch_id'])
     db.execute('UPDATE sale_items SET returned_qty=returned_qty+? WHERE id=?', (qty, item_id))
     db.execute('UPDATE sales SET refunded=refunded+? WHERE id=?', (refund, sid))
     db.execute('INSERT INTO returns(kind, doc_id, item_id, product_id, qty, amount, cost, reason, '
-               'date, user_id) VALUES (?,?,?,?,?,?,?,?,?,?)',
+               'date, user_id, branch_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
                ('sale', sid, item_id, it['product_id'], qty, refund, it['cost'], reason.strip(),
-                date, uid))
+                date, uid, s['branch_id']))
     audit('sale_return', f"{s['receipt_no']} item {item_id} qty {qty} refund {refund}", db)
     # cash to hand back = the part of this refund the customer had already paid
     before = s['total'] - s['refunded'] - s['paid']
@@ -331,7 +339,7 @@ def cancel_sale(db, sid, reason, uid):
         raise RuleError('A reason is required to cancel a sale.')
     for it in db.execute('SELECT * FROM sale_items WHERE sale_id=?', (sid,)).fetchall():
         move_stock(db, it['product_id'], it['qty'], 'sale_cancel', uid, 'sale', sid,
-                   s['receipt_no'], reason=reason.strip(), in_cost=it['cost'])
+                   s['receipt_no'], reason=reason.strip(), in_cost=it['cost'], branch=s['branch_id'])
     db.execute("UPDATE sales SET status='Cancelled', cancel_reason=? WHERE id=?",
                (reason.strip(), sid))
     audit('sale_cancel', f"{s['receipt_no']}: {reason}", db)
@@ -352,9 +360,9 @@ def pay_sale(db, sid, amount, method, date, uid):
 
 # ---------------------------------------------------------------- stocktake
 def start_stocktake(db, notes, category_id, uid, date):
-    st = db.execute('INSERT INTO stocktakes(date, notes, user_id) VALUES (?,?,?)',
-                    (date, notes, uid)).lastrowid
-    sql = 'SELECT id, stock FROM products WHERE active=1'
+    st = db.execute('INSERT INTO stocktakes(date, notes, user_id, branch_id) VALUES (?,?,?,?)',
+                    (date, notes, uid, branch_id())).lastrowid
+    sql = 'SELECT id, stock FROM pv WHERE active=1'
     args = ()
     if category_id:
         sql += ' AND category_id=?'
@@ -371,17 +379,87 @@ def post_stocktake(db, st_id, uid):
     st = db.execute('SELECT * FROM stocktakes WHERE id=?', (st_id,)).fetchone()
     if not st or st['status'] != 'Open':
         raise RuleError('This stocktake is already posted.')
-    rows = db.execute('SELECT si.*, p.stock FROM stocktake_items si JOIN products p '
-                      'ON p.id=si.product_id WHERE stocktake_id=? AND counted_qty IS NOT NULL',
-                      (st_id,)).fetchall()
+    rows = db.execute('SELECT si.*, COALESCE(ps.stock, 0) AS stock FROM stocktake_items si LEFT JOIN product_stock ps '
+                      'ON ps.product_id=si.product_id AND ps.branch_id=? WHERE stocktake_id=? AND counted_qty IS NOT NULL',
+                      (st['branch_id'], st_id)).fetchall()
     for r in rows:
         # difference against stock NOW, so sales made during counting are respected
         diff = _q(r['counted_qty'] - r['stock'])
         if abs(diff) > EPS:
             move_stock(db, r['product_id'], diff, 'stocktake', uid, 'stocktake', st_id,
-                       f'ST-{st_id}', reason='Physical count')
+                       f'ST-{st_id}', reason='Physical count', branch=st['branch_id'])
     db.execute("UPDATE stocktakes SET status='Posted' WHERE id=?", (st_id,))
     audit('stocktake_post', f'ST-{st_id}', db)
+
+
+# ---------------------------------------------------------------- transfers between branches
+def send_transfer(db, to_branch, lines, notes, uid, date):
+    """Send stock from the user's branch: it leaves now at its average cost and is In transit."""
+    src = branch_id()
+    dest = db.execute('SELECT * FROM branches WHERE id=? AND active=1', (to_branch,)).fetchone()
+    if not dest or dest['id'] == src:
+        raise RuleError('Choose another open branch to send to.')
+    merged = {}
+    for pid, q in lines:
+        if q <= EPS:
+            raise RuleError('Quantities must be greater than zero.')
+        merged[pid] = _q(merged.get(pid, 0) + q)
+    if not merged:
+        raise RuleError('Add at least one product line.')
+    ref = next_no(db, 'T', 'transfers', 'ref_no')
+    tid = db.execute('INSERT INTO transfers(ref_no, from_branch, to_branch, date, notes, user_id) '
+                     'VALUES (?,?,?,?,?,?)', (ref, src, dest['id'], date, notes, uid)).lastrowid
+    for pid, q in merged.items():
+        p = product(db, pid, src)
+        if p['stock'] < q - EPS:  # never send what the branch does not have
+            raise RuleError(f"Not enough stock for {p['name']}: available {fmt_qty(p['stock'])} {p['unit']}.")
+        db.execute('INSERT INTO transfer_items(transfer_id, product_id, qty, unit_cost) VALUES (?,?,?,?)',
+                   (tid, pid, q, p['avg_cost']))
+        move_stock(db, pid, -q, 'transfer_out', uid, 'transfer', tid, ref, reason=f"To {dest['name']}",
+                   branch=src)
+    audit('transfer_send', f"{ref} to {dest['code']}", db)
+    return tid
+
+
+def _transfer(db, tid):
+    t = db.execute('SELECT * FROM transfers WHERE id=?', (tid,)).fetchone()
+    if not t:
+        raise RuleError('Transfer not found.')
+    if t['status'] != 'In transit':
+        raise RuleError('This transfer is already finished.')
+    return t
+
+
+def receive_transfer(db, tid, received, uid):
+    """received = {item_id: qty that arrived}. Stock comes in at the sending branch's cost.
+    Anything that did not arrive is recorded on the transfer as lost in transit."""
+    t = _transfer(db, tid)
+    lost = []
+    for it in db.execute('SELECT * FROM transfer_items WHERE transfer_id=?', (tid,)).fetchall():
+        q = _q(received.get(it['id'], it['qty']))
+        if q < -EPS or q > it['qty'] + EPS:
+            raise RuleError(f'Received quantity must be between 0 and {fmt_qty(it["qty"])}.')
+        if q > EPS:
+            move_stock(db, it['product_id'], q, 'transfer_in', uid, 'transfer', tid, t['ref_no'],
+                       in_cost=it['unit_cost'], branch=t['to_branch'])
+        if it['qty'] - q > EPS:
+            lost.append(f"product {it['product_id']} {fmt_qty(it['qty'] - q)}")
+        db.execute('UPDATE transfer_items SET received_qty=? WHERE id=?', (q, it['id']))
+    db.execute("UPDATE transfers SET status='Received', received_by=?, received_at=datetime('now','localtime') "
+               "WHERE id=?", (uid, tid))
+    audit('transfer_receive', t['ref_no'] + (f"; lost in transit: {', '.join(lost)}" if lost else ''), db)
+
+
+def cancel_transfer(db, tid, reason, uid):
+    """Stop a transfer that has not arrived: the stock goes back to the sending branch at the same cost."""
+    t = _transfer(db, tid)
+    if not (reason or '').strip():
+        raise RuleError('A reason is required to cancel.')
+    for it in db.execute('SELECT * FROM transfer_items WHERE transfer_id=?', (tid,)).fetchall():
+        move_stock(db, it['product_id'], it['qty'], 'transfer_cancel', uid, 'transfer', tid, t['ref_no'],
+                   reason=reason.strip(), in_cost=it['unit_cost'], branch=t['from_branch'])
+    db.execute("UPDATE transfers SET status='Cancelled', cancel_reason=? WHERE id=?", (reason.strip(), tid))
+    audit('transfer_cancel', f"{t['ref_no']}: {reason}", db)
 
 
 # ---------------------------------------------------------------- profit

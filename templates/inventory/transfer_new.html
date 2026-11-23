@@ -1,0 +1,33 @@
+{% extends 'base.html' %}{% block title %}Send stock{% endblock %}
+{% block content %}
+<div class="head"><h1>Send stock from {{ g.branch.name if g.branch else 'this branch' }}</h1><a class="btn light" href="{{ url_for('inventory.transfers') }}">Back to transfers</a></div>
+{% if not dests %}<div class="flash warn">There is no other open branch to send to. An administrator can add one in ⚙ Admin → Branches.</div>
+{% elif not products %}<div class="flash warn">This branch has no stock to send.</div>
+{% else %}
+<form method="post">{{ csrf() }}{{ once() }}
+<div class="card grid">
+  <div><label>Send to *</label><select name="to_branch" required>{% if dests|length > 1 %}<option value="">Choose…</option>{% endif %}
+    {% for b in dests %}<option value="{{ b.id }}">{{ b.name }} ({{ b.code }})</option>{% endfor %}</select></div>
+  <div class="wide"><label>Notes</label><input name="notes" placeholder="e.g. driver, vehicle, reason"></div>
+</div>
+<div class="card tablewrap">
+<table id="lines"><tr><th>Product</th><th class="n">Quantity</th><th></th></tr></table>
+<div class="actions"><button type="button" class="light small" onclick="addLine()">+ Add line</button></div>
+</div>
+<div class="actions"><button>Send now</button><a class="btn light" href="{{ url_for('inventory.transfers') }}">Cancel</a></div>
+<p class="muted">The stock leaves this branch now at its average cost. It shows as "In transit" until the other branch receives it.</p>
+</form>
+<template id="tpl"><tr>
+  <td><select name="pid" style="min-width:240px"><option value="">Choose product…</option>
+  {% for p in products %}<option value="{{ p.id }}">{{ p.name }} ({{ p.code }}), in stock {{ p.stock|qty }} {{ p.unit }}</option>{% endfor %}</select></td>
+  <td class="n"><input name="qty" inputmode="decimal" style="width:110px;text-align:right"></td>
+  <td><button type="button" class="x" onclick="this.closest('tr').remove()">×</button></td></tr></template>
+{% endif %}
+{% endblock %}
+{% block scripts %}<script>
+function addLine() {
+  var tpl = document.getElementById('tpl'); if (!tpl) return;
+  document.getElementById('lines').appendChild(tpl.content.firstElementChild.cloneNode(true));
+}
+addLine(); addLine(); addLine();
+</script>{% endblock %}

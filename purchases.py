@@ -1,7 +1,7 @@
 """Purchases: order -> confirm -> receive into stock -> pay -> supplier returns."""
 from flask import Blueprint, flash, g, redirect, render_template, request, url_for
 
-from core import (RuleError, claim_once, date_range, fail, get_db, parse_money, parse_qty,
+from core import (RuleError, branch_id, claim_once, date_range, fail, get_db, parse_money, parse_qty,
                   payment_methods, requires, today, tx)
 import rules
 
@@ -15,8 +15,8 @@ def index():
     status = request.args.get('status', '')
     sup = request.args.get('supplier', type=int)
     sql = ('SELECT p.*, s.name AS supplier FROM purchases p JOIN suppliers s ON s.id=p.supplier_id '
-           'WHERE p.date BETWEEN ? AND ?')
-    args = [start, end]
+           'WHERE p.branch_id=? AND p.date BETWEEN ? AND ?')
+    args = [branch_id(), start, end]
     if status == 'unpaid':
         sql += " AND p.status NOT IN ('Draft','Cancelled') AND p.total-p.returned_value-p.paid>0"
     elif status:
@@ -65,7 +65,7 @@ def edit(pur_id=None):
         except RuleError as e:
             flash(str(e), 'error')
     items = db.execute('SELECT * FROM purchase_items WHERE purchase_id=?', (pur_id,)).fetchall() if pur else []
-    products = db.execute('SELECT id, code, name, unit, avg_cost FROM products WHERE active=1 '
+    products = db.execute('SELECT id, code, name, unit, avg_cost FROM pv WHERE active=1 '
                           'ORDER BY name').fetchall()
     sups = db.execute('SELECT id, name FROM suppliers WHERE active=1 ORDER BY name').fetchall()
     return render_template('purchases/edit.html', pur=pur, items=items, products=products, sups=sups,

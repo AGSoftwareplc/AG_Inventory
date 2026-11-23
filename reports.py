@@ -23,15 +23,15 @@ def index():
     end = request.args.get('end') or t
     d = {
         'products': db.execute('SELECT COUNT(*) FROM products WHERE active=1').fetchone()[0],
-        'stock_value': db.execute('SELECT COALESCE(SUM(stock*avg_cost),0) FROM products WHERE active=1 '
+        'stock_value': db.execute('SELECT COALESCE(SUM(stock*avg_cost),0) FROM pv WHERE active=1 '
                                   'AND stock>0').fetchone()[0],
-        'units': db.execute('SELECT COALESCE(SUM(stock),0) FROM products WHERE active=1 AND stock>0').fetchone()[0],
+        'units': db.execute('SELECT COALESCE(SUM(stock),0) FROM pv WHERE active=1 AND stock>0').fetchone()[0],
         'purchases': db.execute("SELECT COALESCE(SUM(total),0) FROM purchases WHERE status NOT IN "
                                 "('Draft','Cancelled') AND date BETWEEN ? AND ?", (start, end)).fetchone()[0],
     }
     p = rules.profit(db, start, end)
-    low = db.execute('SELECT id, code, name, unit, stock, min_stock FROM products WHERE active=1 AND '
-                     'min_stock>0 AND stock<=min_stock ORDER BY stock - min_stock LIMIT 15').fetchall()
+    low = db.execute('SELECT id, code, name, unit, stock, min_stock FROM pv WHERE active=1 AND '
+                     'min_stock>0 AND in_branch AND stock<=min_stock ORDER BY stock - min_stock LIMIT 15').fetchall()
     best = db.execute("SELECT p.name, p.unit, SUM(i.qty-i.returned_qty) AS q, "
                       "SUM((i.qty-i.returned_qty)*i.price) AS v FROM sale_items i JOIN sales s ON "
                       "s.id=i.sale_id JOIN products p ON p.id=i.product_id WHERE s.status='Completed' "
@@ -45,7 +45,7 @@ def index():
             'SELECT sp.method AS k, SUM(sp.amount) AS v FROM sale_payments sp JOIN sales s ON s.id=sp.sale_id '
             "WHERE s.status='Completed' AND sp.date BETWEEN ? AND ? GROUP BY sp.method", (start, end)))
         charts['cats'] = donut(db.execute(
-            "SELECT COALESCE(c.name, 'No category') AS k, SUM(p.stock*p.avg_cost) AS v FROM products p "
+            "SELECT COALESCE(c.name, 'No category') AS k, SUM(p.stock*p.avg_cost) AS v FROM pv p "
             'LEFT JOIN categories c ON c.id=p.category_id WHERE p.active=1 AND p.stock>0 GROUP BY k'))
         top = max(p['net_sales'], p['cogs'], p['expenses'], abs(p['net_profit']), 1)
         charts['flow'] = [(label, v, 100 * abs(v) / top, css) for label, v, css in (
@@ -147,14 +147,14 @@ M, Q, T, N = 'money', 'qty', 'text', 'num'
 
 def _stock(db, f, low=False):
     sql = ('SELECT p.code, p.name, c.name AS cat, p.unit, p.stock, p.min_stock, p.avg_cost, p.price, '
-           'p.stock*p.avg_cost AS value FROM products p LEFT JOIN categories c ON c.id=p.category_id '
+           'p.stock*p.avg_cost AS value FROM pv p LEFT JOIN categories c ON c.id=p.category_id '
            'WHERE p.active=1')
     args = []
     if f['category']:
         sql += ' AND p.category_id=?'
         args.append(f['category'])
     if low:
-        sql += ' AND p.min_stock>0 AND p.stock<=p.min_stock'
+        sql += ' AND p.min_stock>0 AND p.in_branch AND p.stock<=p.min_stock'
     cols = [('Code', 'code', T), ('Product', 'name', T), ('Category', 'cat', T), ('Unit', 'unit', T),
             ('Stock', 'stock', Q), ('Min', 'min_stock', Q), ('Avg cost', 'avg_cost', M),
             ('Price', 'price', M), ('Stock value', 'value', M)]
