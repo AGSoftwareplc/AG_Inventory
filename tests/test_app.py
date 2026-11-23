@@ -337,6 +337,28 @@ class ShopTest(unittest.TestCase):
         self.assertIn(b'Number of sales per day', html)
         self.assertNotIn(b'How customers paid', html)
 
+    def test_bulk_products(self):
+        self.assertEqual(self.c.get('/products/bulk').status_code, 200)
+        form = {'code': ['B1', 'B2', 'B1', ''], 'name': ['Tea', 'Milk', 'Copy', ''],
+                'category_id': ['', '', '', ''], 'unit': ['pcs', 'litre', 'pcs', 'pcs'],
+                'barcode': ['', '', '', ''], 'price': ['10', '', '5', ''], 'cost': ['6', '', '', ''],
+                'opening': ['4', '', '', ''], 'min_stock': ['0', '0', '0', '0']}
+        r = self.post('/products/bulk', form)
+        # row 2 has no price, row 3 repeats code B1: nothing saved, typed values kept
+        self.assertIn(b'Nothing was saved yet: 2 row(s)', r.data)
+        self.assertIn(b'also used in row 1', r.data)
+        self.assertIn(b'value="Milk"', r.data)
+        self.assertIsNone(self.one("SELECT 1 FROM products WHERE code IN ('B1','B2')"))
+        form.update(code=['B1', 'B2', 'B3', ''], price=['10', '20', '5', ''])
+        r = self.post('/products/bulk', form, follow_redirects=True)
+        self.assertIn(b'3 product(s) saved', r.data)
+        tea = self.one("SELECT stock, avg_cost, price FROM products WHERE code='B1'")
+        self.assertEqual((tea['stock'], tea['avg_cost'], tea['price']), (4, 600, 1000))
+        self.assertEqual(self.one("SELECT unit FROM products WHERE code='B2'")['unit'], 'litre')
+        # an existing code is refused on the next batch
+        r = self.post('/products/bulk', {'code': ['b2'], 'name': ['Again'], 'price': ['1']})
+        self.assertIn(b'already belongs to another product', r.data)
+
     # ---------------------------------------------------------------- security
     def test_default_password_warning(self):
         self.assertIn(b'starter password', self.c.get('/').data)

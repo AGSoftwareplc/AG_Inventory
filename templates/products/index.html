@@ -1,7 +1,7 @@
 {% extends 'base.html' %}{% block title %}Products{% endblock %}
 {% block content %}
 <div class="head"><h1>Products</h1>
-  <div>{% if can('products') %}<a class="btn light" href="{{ url_for('products.cats') }}">Categories</a> <a class="btn" href="{{ url_for('products.edit') }}">+ New product</a>{% endif %}</div></div>
+  <div>{% if can('products') %}<a class="btn light" href="{{ url_for('products.cats') }}">Categories</a> <a class="btn light" href="{{ url_for('products.bulk') }}">+ Several products</a> <a class="btn" href="{{ url_for('products.edit') }}">+ New product</a>{% endif %}</div></div>
 <form class="filters">
   <div class="grow"><label>Search name, code or barcode</label><input name="q" value="{{ q }}" autofocus></div>
   <div><label>Category</label><select name="cat"><option value="">All</option>{% for c in cats %}<option value="{{ c.id }}" {{ 'selected' if cat|string == c.id|string }}>{{ c.name }}</option>{% endfor %}</select></div>
