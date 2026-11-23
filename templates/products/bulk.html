@@ -5,7 +5,7 @@
   <td><input name="name" value="{{ r.name }}" style="min-width:150px"></td>
   <td><select name="category_id"><option value="">(none)</option>
     {% for c in cats %}<option value="{{ c.id }}" {{ 'selected' if r.category_id|string == c.id|string }}>{{ c.name }}</option>{% endfor %}</select></td>
-  <td><input name="unit" list="units" value="{{ r.unit or 'pcs' }}" style="width:82px"></td>
+  <td><select name="unit" style="width:90px">{% for u in units %}<option {{ 'selected' if u == r.unit }}>{{ u }}</option>{% endfor %}</select></td>
   <td><input name="barcode" value="{{ r.barcode }}" style="width:105px"></td>
   <td><input name="price" inputmode="decimal" value="{{ r.price }}" class="num"></td>
   <td><input name="cost" inputmode="decimal" value="{{ r.cost }}" class="num"></td>
@@ -23,7 +23,7 @@
   <th class="n">Selling price *</th><th class="n">Purchase cost</th><th class="n">Opening stock</th><th class="n">Min stock</th><th></th></tr></thead>
 {% for r in rows %}{{ row(r, errors.get(loop.index0)) }}{% endfor %}
 </table>
-<datalist id="units">{% for u in units %}<option value="{{ u }}">{% endfor %}</datalist>
+
 <div class="actions"><button type="button" class="light small" onclick="addRow()">+ Add row</button>
   <button type="button" class="light small" onclick="for (var i = 0; i < 5; i++) addRow()">+ 5 rows</button></div>
 </div>

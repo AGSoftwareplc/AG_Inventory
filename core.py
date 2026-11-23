@@ -47,6 +47,7 @@ DEFAULT_SETTINGS = {
     'logo_file': '',
     'currency': 'ETB',
     'payment_methods': 'Cash,Bank transfer,Mobile banking',
+    'units': 'pcs,kg,g,litre,ml,metre,box,pack,dozen,carton,bag,bottle',
     'receipt_footer': 'Thank you for shopping with us!',
     'allow_negative': '0',
     'last_backup': '',
@@ -365,6 +366,14 @@ def setting(key):
     if 'settings' not in g:
         g.settings = {r['key']: r['value'] for r in get_db().execute('SELECT * FROM settings')}
     return g.settings.get(key, DEFAULT_SETTINGS.get(key, ''))
+
+
+def units(current=None):
+    """Units of measure offered on product forms (Admin -> Business profile), plus a product's own unit."""
+    out = [u.strip() for u in setting('units').split(',') if u.strip()] or ['pcs']
+    if current and current not in out:
+        out.append(current)
+    return out
 
 
 def payment_methods():
