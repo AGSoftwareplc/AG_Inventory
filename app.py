@@ -74,6 +74,12 @@ def switch_branch():
     return redirect(nxt if nxt.startswith('/') and not nxt.startswith('//') else url_for('dash.index'))
 
 
+@auth.route('/favicon.ico')
+def favicon():
+    # Browsers ask for /favicon.ico on their own; serve the app icon there too.
+    return send_file(os.path.join(BASE_DIR, 'static', 'favicon.ico'), mimetype='image/x-icon', max_age=0)
+
+
 @auth.route('/logo')
 @login_required
 def logo():
