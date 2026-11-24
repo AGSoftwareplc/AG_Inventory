@@ -777,6 +777,22 @@ class ShopTest(unittest.TestCase):
         self.assertEqual([b['remaining'] for b in self.batches(p['id'])], [8, 7])
         self.assertEqual(self.c.get(f"/inventory/api/batches?pid={p['id']}").get_json()[0]['id'], b1['id'])
 
+    def test_adjust_add_and_remove_tabs(self):
+        p = self.stocked_product()
+        start = self.stock(p['id'])['stock']
+        self.post('/inventory/adjust', {'mode': 'add', 'product_id': p['id'], 'qty': '4', 'reason': 'found'},
+                  once=False)
+        self.assertEqual(self.stock(p['id'])['stock'], start + 4)
+        self.post('/inventory/adjust', {'mode': 'remove', 'kind': 'correction', 'product_id': p['id'], 'qty': '3',
+                                        'reason': 'count too high'}, once=False)
+        self.assertEqual(self.stock(p['id'])['stock'], start + 1)
+        r = self.post('/inventory/adjust', {'mode': 'remove', 'kind': 'correction', 'product_id': p['id'],
+                                            'qty': '-2', 'reason': 'x'}, once=False)
+        self.assertIn(b'must be greater than zero', r.data)  # no signed numbers any more
+        self.assertEqual(self.stock(p['id'])['stock'], start + 1)
+        self.assertIn(b'Remove stock', self.c.get('/inventory/adjust').data)
+        self.assertIn(b'how many to add', self.c.get('/inventory/adjust?mode=add').data)
+
     def test_transfer_keeps_batches(self):
         p = self.stocked_product()
         self.post('/admin/branches/new', {'code': 'BOLE', 'name': 'Bole shop', 'active': '1'}, once=False)

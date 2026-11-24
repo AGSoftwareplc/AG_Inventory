@@ -41,14 +41,18 @@ def adjust():
     db = get_db()
     if request.method == 'POST':
         try:
-            kind = request.form.get('kind')
-            qty = parse_qty(request.form.get('qty'), allow_negative=(kind == 'correction'))
+            mode = request.form.get('mode')
+            kind = 'correction' if mode == 'add' else request.form.get('kind')
+            mode = mode or ('add' if kind == 'correction' else 'remove')
+            qty = parse_qty(request.form.get('qty'))  # always positive; the tab decides add or remove
+            if kind == 'correction' and mode == 'remove':
+                qty = -qty
             with tx() as db:
                 rules.adjust_stock(db, int(request.form['product_id']), kind, qty,
                                    request.form.get('reason', ''), g.user['id'],
                                    request.form.get('batch_id', type=int))
-            flash('Stock adjusted.', 'ok')
-            return redirect(url_for('inventory.adjust'))
+            flash('Stock added.' if qty > 0 else 'Stock removed.', 'ok')
+            return redirect(url_for('inventory.adjust', mode=mode))
         except (RuleError, ValueError, KeyError) as e:
             flash(str(e) if isinstance(e, RuleError) else 'Choose a product.', 'error')
     products = db.execute('SELECT id, code, name, unit, stock FROM pv WHERE active=1 '
@@ -56,7 +60,8 @@ def adjust():
     recent = db.execute("SELECT m.*, p.name, p.unit, u.username FROM stock_moves m JOIN products p "
                         "ON p.id=m.product_id LEFT JOIN users u ON u.id=m.user_id WHERE m.ref_type="
                         "'adjustment' AND m.branch_id=? ORDER BY m.id DESC LIMIT 30", (branch_id(),)).fetchall()
-    return render_template('inventory/adjust.html', products=products, recent=recent,
+    mode = request.values.get('mode') if request.values.get('mode') in ('add', 'remove') else 'remove'
+    return render_template('inventory/adjust.html', products=products, recent=recent, mode=mode,
                            sel=request.args.get('pid', type=int), labels=rules.MOVE_LABELS)
 
 

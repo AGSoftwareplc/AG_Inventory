@@ -1,18 +1,25 @@
 {% extends 'base.html' %}{% block title %}Adjust stock{% endblock %}
 {% block content %}
 <div class="head"><h1>Adjust stock</h1><a class="btn light" href="{{ url_for('inventory.index') }}">Back to inventory</a></div>
-<form method="post" class="card">{{ csrf() }}
+{% set add = mode == 'add' %}
+<div class="tabs" style="display:flex;gap:.4rem;margin-bottom:.6rem">
+  <a class="btn {{ '' if add else 'light' }}" href="{{ url_for('inventory.adjust', mode='add', pid=sel) }}">+ Add stock</a>
+  <a class="btn {{ 'light' if add else '' }}" href="{{ url_for('inventory.adjust', mode='remove', pid=sel) }}">− Remove stock</a>
+</div>
+<form method="post" class="card">{{ csrf() }}<input type="hidden" name="mode" value="{{ mode }}">
+<h2 style="margin-top:0">{{ 'Add stock' if add else 'Remove stock' }}</h2>
 <div class="grid">
   <div class="wide"><label>Product *</label><select name="product_id" id="pid" required><option value="">Choose…</option>
   {% for p in products %}<option value="{{ p.id }}" {{ 'selected' if sel == p.id }}>{{ p.name }} ({{ p.code }}), in stock {{ p.stock|qty }} {{ p.unit }}</option>{% endfor %}</select></div>
-  <div><label>Type *</label><select name="kind" id="kind">
-    <option value="damaged">Damaged (remove)</option><option value="expired">Expired (remove)</option>
-    <option value="lost">Lost / missing (remove)</option><option value="correction">Correction (+ add / − remove)</option></select></div>
-  <div><label>Quantity * <span class="muted" id="qhint">(how many to remove)</span></label><input name="qty" inputmode="decimal" required></div>
-  <div class="wide"><label>Batch <span class="muted">(optional: for example the batch that expired)</span></label><select name="batch_id" id="batch" data-sel="{{ request.args.get('batch', '') }}"><option value="">Automatic (FIFO: expiring / oldest first)</option></select></div>
-  <div class="wide"><label>Reason *</label><input name="reason" required placeholder="e.g. broken during unloading"></div>
+  {% if add %}<input type="hidden" name="kind" value="correction">
+  {% else %}<div><label>Type *</label><select name="kind">
+    <option value="damaged">Damaged</option><option value="expired">Expired</option>
+    <option value="lost">Lost / missing</option><option value="correction">Correction (count was too high)</option></select></div>{% endif %}
+  <div><label>Quantity * <span class="muted">({{ 'how many to add' if add else 'how many to remove' }})</span></label><input name="qty" inputmode="decimal" required placeholder="e.g. 2"></div>
+  <div class="wide"><label>Batch <span class="muted">({{ 'optional: add to a batch like this one (same cost and dates)' if add else 'optional: for example the batch that expired' }})</span></label><select name="batch_id" id="batch" data-sel="{{ request.args.get('batch', '') }}"><option value="">{{ 'New batch at the average cost' if add else 'Automatic (FIFO: expiring / oldest first)' }}</option></select></div>
+  <div class="wide"><label>Reason *</label><input name="reason" required placeholder="{{ 'e.g. found in the store room' if add else 'e.g. broken during unloading' }}"></div>
 </div>
-<div class="actions"><button>Save adjustment</button></div>
+<div class="actions"><button>{{ 'Add to stock' if add else 'Remove from stock' }}</button></div>
 </form>
 <h2>Recent adjustments</h2>
 <div class="card tablewrap" style="padding:0"><table><tr><th>Date</th><th>Product</th><th>Type</th><th class="n">Qty</th><th>Reason</th><th>User</th></tr>
@@ -39,8 +46,4 @@
   pid.addEventListener('change', load);
   load();
 })();
-document.getElementById('kind').addEventListener('change', function () {
-  document.getElementById('qhint').textContent = this.value === 'correction'
-    ? '(positive adds, negative removes, e.g. -2)' : '(how many to remove)';
-});
 </script>{% endblock %}
