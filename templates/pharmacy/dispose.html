@@ -1,0 +1,18 @@
+{% extends 'base.html' %}{% block title %}Dispose{% endblock %}
+{% block content %}{% include 'pharmacy/_tabs.html' %}
+<h1>Dispose of stock: {{ b.name }}, batch {{ b.batch_no or ('#' ~ b.id) }}</h1>
+<div class="card grid"><div><label>Expiry</label>{{ b.expiry or '—' }}</div><div><label>Status</label>{{ b.status }}</div><div><label>Still in stock</label><b>{{ b.remaining|qty }} {{ b.unit }}</b></div>
+{% if b.rx_class in CONTROLLED %}<div class="wide"><span class="badge err">Controlled medicine</span> The disposal is entered in the destruction register (Disposals) and in the controlled-medicine register.</div>{% endif %}</div>
+<form method="post" class="card" enctype="multipart/form-data">{{ csrf() }}{{ once() }}
+<div class="grid">
+  <div><label>Quantity *</label><input name="qty" inputmode="decimal" value="{{ f.qty or b.remaining|qty }}" required></div>
+  <div><label>Method *</label><select name="method">{% for m in methods %}<option {{ 'selected' if f.method == m }}>{{ m }}</option>{% endfor %}</select></div>
+  <div><label>Date</label><input type="date" name="date" value="{{ f.date or today }}"></div>
+  <div class="wide"><label>Reason *</label><input name="reason" value="{{ f.reason or '' }}" placeholder="e.g. expired, broken bottles, recall RC-…"></div>
+  <div><label>Witness 1 *</label><select name="witness1"><option value="">Choose…</option>{% for u in users %}<option value="{{ u.id }}">{{ u.full_name }}{{ ' (pharmacist)' if u.licence_no }}</option>{% endfor %}</select></div>
+  <div><label>Witness 2 *</label><select name="witness2"><option value="">Choose…</option>{% for u in users %}<option value="{{ u.id }}">{{ u.full_name }}{{ ' (pharmacist)' if u.licence_no }}</option>{% endfor %}</select></div>
+  <div class="wide"><label>Disposal certificate (PDF, JPG, PNG)</label><input type="file" name="certificate" accept=".pdf,.jpg,.jpeg,.png"></div>
+</div>
+<p class="muted">At least one witness must be a pharmacist with a valid licence. The quantity is written off from this batch at its cost.</p>
+<div class="actions"><button class="danger">Record disposal and write off</button> <a class="btn light" href="{{ url_for('inventory.batch', bid=b.id) }}">Cancel</a></div></form>
+{% endblock %}

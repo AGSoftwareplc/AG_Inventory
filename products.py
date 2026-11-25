@@ -5,6 +5,7 @@ from flask import Blueprint, flash, g, redirect, render_template, request, url_f
 
 from core import RuleError, audit, branch_id, claim_once, fail, get_db, parse_money, parse_qty, requires, tx
 import core
+import pharmacy
 import rules
 from rules import move_stock
 
@@ -143,6 +144,7 @@ def edit(pid=None):
     if request.method == 'POST':
         try:
             v = _form_values(request.form, p is None)
+            dup = pharmacy.duplicate_medicine(db, pid, request.form) if core.pharmacy_on() else None
             with tx() as db:
                 if p is None:
                     pid = _create(db, v)
@@ -158,14 +160,20 @@ def edit(pid=None):
                         db.execute('INSERT INTO price_changes(product_id, old_price, new_price, '
                                    'user_id) VALUES (?,?,?,?)', (pid, p['price'], v['price'], g.user['id']))
                         audit('price_change', f"{v['code']}: {p['price']} -> {v['price']}", db)
+                if core.pharmacy_on():
+                    pharmacy.save_medicine(db, pid, request.form)
             flash('Product saved.', 'ok')
+            if dup:
+                flash(f"Possible duplicate: {dup['name']} ({dup['code']}) has the same generic name, strength, "
+                      f"dosage form and manufacturer.", 'warn')
             return redirect(url_for('products.view', pid=pid))
         except sqlite3.IntegrityError:
             flash('Another product already uses this code or barcode.', 'error')
         except RuleError as e:
             flash(str(e), 'error')
+    med = rules.medicine(db, pid) if pid else None
     return render_template('products/edit.html', p=p, f=request.form, cats=categories(True),
-                           units=core.units(p['unit'] if p else None))
+                           units=core.units(p['unit'] if p else None), med=med, **pharmacy.form_lists())
 
 
 @bp.route('/<int:pid>')
@@ -212,7 +220,8 @@ def view(pid):
     sold = db.execute("SELECT COALESCE(SUM(i.qty-i.returned_qty),0) AS q, COALESCE(SUM((i.qty-i.returned_qty)*i.price),0) AS v "
                       "FROM sale_items i JOIN sales s ON s.id=i.sale_id WHERE s.status='Completed' AND i.product_id=? "
                       "AND s.branch_id=?", (pid, b)).fetchone()
-    return render_template('products/view.html', p=p, moves=moves, prices=prices, batches=batches, sales=sales,
+    med = rules.medicine(db, pid)
+    return render_template('products/view.html', p=p, med=med, moves=moves, prices=prices, batches=batches, sales=sales,
                            purchases=purchases, serials=serials, in_stock_sn=in_stock_sn, sold=sold, tab=tab,
                            limit=limit, labels=rules.MOVE_LABELS)
 
@@ -263,13 +272,14 @@ def delete(pid):
     db = get_db()
     used = db.execute('SELECT 1 FROM stock_moves WHERE product_id=? UNION SELECT 1 FROM sale_items '
                       'WHERE product_id=? UNION SELECT 1 FROM purchase_items WHERE product_id=? '
-                      'LIMIT 1', (pid, pid, pid)).fetchone()
+                      'UNION SELECT 1 FROM rx_items WHERE product_id=? LIMIT 1', (pid, pid, pid, pid)).fetchone()
     if used:
         return fail('This product has transaction history and cannot be deleted. '
                     'Deactivate it instead.', 'products.edit', pid=pid)
     with tx() as db:
         db.execute('DELETE FROM price_changes WHERE product_id=?', (pid,))
         db.execute('DELETE FROM product_stock WHERE product_id=?', (pid,))
+        db.execute('DELETE FROM medicines WHERE product_id=?', (pid,))
         db.execute('DELETE FROM products WHERE id=?', (pid,))
         audit('product_delete', str(pid), db)
     flash('Product deleted.', 'ok')

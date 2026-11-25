@@ -1,0 +1,16 @@
+{% extends 'base.html' %}{% block title %}Labels {{ rx.ref_no }}{% endblock %}
+{% block content %}
+<div class="head noprint"><h1>Dispensing labels · {{ rx.ref_no }}</h1>
+<span><button onclick="window.print()">Print labels</button> <a class="btn light" href="{{ url_for('sales.receipt', sid=d.sale_id) }}">Receipt</a> <a class="btn light" href="{{ url_for('pharmacy.rx_view', rid=rx.id) }}">Back to prescription</a></span></div>
+<div class="rxlabels">
+{% for i in items %}<div class="rxlabel">
+  <div class="rxl-head"><b>{{ setting('shop_name') }}</b> <span>{{ setting('shop_phone') }}</span></div>
+  <div class="rxl-patient">{{ rx.patient }}</div>
+  <div class="rxl-med">{{ i.name }} {{ i.strength or '' }} <span>× {{ i.qty|qty }} {{ i.unit }}</span></div>
+  <div class="rxl-dose">{{ i.dose }}{{ ', ' ~ i.frequency if i.frequency }}{{ ', for ' ~ i.duration if i.duration }}</div>
+  {% if i.instructions %}<div>{{ i.instructions }}</div>{% endif %}
+  {% if i.storage %}<div class="rxl-small">Store: {{ i.storage }}</div>{% endif %}
+  <div class="rxl-small">{{ d.date }} · {{ d.receipt_no }} · Pharmacist: {{ d.pharmacist }}</div>
+</div>{% endfor %}
+</div>
+{% endblock %}

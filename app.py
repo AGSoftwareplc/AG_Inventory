@@ -135,8 +135,8 @@ def create_app(database=None, testing=False):
                                              'platform.db')
     core.init_platform(app.config['PLATFORM_DB'], app.config['DATABASE'], app.config['BACKUP_DIR'])
 
-    import admin, contacts, expenses, inventory, products, purchases, reports, sales
-    for bp in (auth, reports.dash, admin.bp, contacts.bp, expenses.bp, inventory.bp, products.bp,
+    import admin, contacts, expenses, inventory, pharmacy, products, purchases, reports, sales
+    for bp in (auth, reports.dash, admin.bp, contacts.bp, expenses.bp, inventory.bp, pharmacy.bp, products.bp,
                purchases.bp, reports.bp, sales.bp):
         app.register_blueprint(bp)
 
@@ -159,12 +159,14 @@ def create_app(database=None, testing=False):
                 app.logger.warning('Daily backup failed: %s', e)
 
     app.jinja_env.filters.update(money=fmt_money, qty=fmt_qty, money_input=money_input, signed=core.fmt_signed)
-    app.jinja_env.globals.update(csrf=csrf_field, once=once_field, can=can, setting=setting)
+    app.jinja_env.globals.update(csrf=csrf_field, once=once_field, can=can, setting=setting,
+                                 pharmacy_on=core.pharmacy_on)
 
     @app.context_processor
     def ctx():
         low = low_stock_count() if g.get('user') and can('inventory') else 0
-        return {'low_stock': low, 'currency': setting('currency')}
+        rx_alerts = pharmacy.alerts() if g.get('user') and can('inventory') and core.pharmacy_on() else None
+        return {'low_stock': low, 'currency': setting('currency'), 'rx_alerts': rx_alerts}
 
     @app.errorhandler(403)
     def forbidden(_e):

@@ -1,0 +1,9 @@
+{% extends 'base.html' %}{% block title %}Disposals{% endblock %}
+{% block content %}{% include 'pharmacy/_tabs.html' %}
+<h1>Disposals &amp; destruction register</h1>
+<p class="muted">To dispose of stock, open <a href="{{ url_for('pharmacy.expiry') }}">Expiry &amp; batches</a> or the batch page and choose <b>Dispose</b>.</p>
+<div class="card tablewrap" style="padding:0"><table><tr><th>Ref.</th><th>Date</th><th>Medicine</th><th>Batch no.</th><th class="n">Qty</th><th>Method</th><th>Reason</th><th>Witnesses</th><th>Certificate</th></tr>
+{% for d in rows %}<tr><td>{{ d.ref_no }}</td><td>{{ d.date }}</td><td>{{ d.name }}{% if d.rx_class in CONTROLLED %} <span class="badge err">{{ d.rx_class }}</span>{% endif %}</td><td><a href="{{ url_for('inventory.batch', bid=d.batch_id) }}">{{ d.batch_no or '#' ~ d.batch_id }}</a></td>
+<td class="n">{{ d.qty|qty }} {{ d.unit }}</td><td>{{ d.method }}</td><td>{{ d.reason }}</td><td>{{ d.w1 }}, {{ d.w2 }}</td><td>{% if d.certificate %}<a href="{{ url_for('pharmacy.certificate', did=d.id) }}" target="_blank">Open</a>{% else %}<span class="muted">—</span>{% endif %}</td></tr>
+{% else %}<tr><td colspan="9" class="muted">No disposals yet.</td></tr>{% endfor %}</table></div>
+{% endblock %}

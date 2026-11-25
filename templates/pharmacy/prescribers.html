@@ -1,0 +1,16 @@
+{% extends 'base.html' %}{% block title %}Prescribers{% endblock %}
+{% block content %}{% include 'pharmacy/_tabs.html' %}
+<h1>Prescribers</h1>
+<form method="post" class="card">{{ csrf() }}<input type="hidden" name="next" value="{{ nxt }}">{% if edit %}<input type="hidden" name="id" value="{{ edit.id }}">{% endif %}
+<h2 style="margin-top:0">{{ 'Edit ' ~ edit.name if edit else 'Add a prescriber' }}</h2>
+<div class="grid">
+  <div><label>Name *</label><input name="name" value="{{ edit.name if edit else '' }}" required></div>
+  <div><label>Profession</label><input name="profession" value="{{ edit.profession if edit else '' }}" placeholder="e.g. Physician, Health officer"></div>
+  <div><label>Licence number</label><input name="licence_no" value="{{ edit.licence_no if edit else '' }}"></div>
+  <div><label>Health facility</label><input name="facility" value="{{ edit.facility if edit else '' }}"></div>
+  <div><label>Phone</label><input name="phone" value="{{ edit.phone if edit else '' }}"></div>
+</div><div class="actions"><button>Save prescriber</button>{% if edit %} <a class="btn light" href="{{ url_for('pharmacy.prescribers') }}">Cancel</a>{% endif %}</div></form>
+<div class="card tablewrap" style="padding:0"><table><tr><th>Name</th><th>Profession</th><th>Licence no.</th><th>Facility</th><th>Phone</th><th class="n">Prescriptions</th><th></th></tr>
+{% for r in rows %}<tr><td>{{ r.name }}</td><td>{{ r.profession }}</td><td>{{ r.licence_no }}</td><td>{{ r.facility }}</td><td>{{ r.phone }}</td><td class="n">{{ r.n }}</td><td><a href="{{ url_for('pharmacy.prescribers', edit=r.id) }}">Edit</a></td></tr>
+{% else %}<tr><td colspan="7" class="muted">No prescribers yet.</td></tr>{% endfor %}</table></div>
+{% endblock %}

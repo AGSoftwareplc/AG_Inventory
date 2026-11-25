@@ -10,7 +10,7 @@
   <div class="wide"><label>Notes</label><input name="notes" value="{{ pur.notes if pur else '' }}"></div>
 </div>
 <div class="card tablewrap">
-<table id="lines"><tr><th>Product</th><th class="n">Quantity</th><th class="n">Unit cost ({{ currency }})</th><th class="n">Line total</th><th>Expiry date <span class="muted">(optional)</span></th><th>Serial numbers <span class="muted">(only for serial-numbered products)</span></th><th></th></tr></table>
+<table id="lines"><tr><th>Product</th><th class="n">Quantity</th><th class="n">Unit cost ({{ currency }})</th><th class="n">Line total</th><th>Batch no.{% if setting('pharmacy') == '1' %} <span class="muted">(medicines)</span>{% else %} <span class="muted">(optional)</span>{% endif %}</th><th>Expiry date <span class="muted">{{ '(required for medicines)' if setting('pharmacy') == '1' else '(optional)' }}</span></th><th>Serial numbers <span class="muted">(only for serial-numbered products)</span></th><th></th></tr></table>
 <div class="actions"><button type="button" class="light small" onclick="addLine()">+ Add line</button></div>
 <div class="grid" style="margin-top:1rem;max-width:520px;margin-left:auto">
   <div><label>Discount ({{ currency }})</label><input name="discount" id="disc" inputmode="decimal" value="{{ pur.discount|money_input if pur else '' }}"></div>
@@ -25,27 +25,30 @@ For products with serial numbers, type or scan one serial number per item (one p
 </form>
 <template id="tpl"><tr>
   <td><select name="pid" onchange="pick(this)" style="min-width:220px"><option value="">Choose product…</option>
-  {% for p in products %}<option value="{{ p.id }}" data-cost="{{ p.avg_cost|money_input }}" data-ser="{{ p.serial_tracked }}">{{ p.name }} ({{ p.code }}, {{ p.unit }}){{ ' · serial no.' if p.serial_tracked }}</option>{% endfor %}</select></td>
+  {% for p in products %}<option value="{{ p.id }}" data-cost="{{ p.avg_cost|money_input }}" data-ser="{{ p.serial_tracked }}" data-med="{{ 1 if p.med else 0 }}">{{ p.name }} ({{ p.code }}, {{ p.unit }}){{ ' · serial no.' if p.serial_tracked }}{{ ' · ❄ ' ~ p.storage if p.med and p.storage and p.storage[0] in '2F' }}</option>{% endfor %}</select></td>
   <td class="n"><input name="qty" inputmode="decimal" style="width:100px;text-align:right" oninput="calc()"></td>
   <td class="n"><input name="cost" inputmode="decimal" style="width:120px;text-align:right" oninput="calc()"></td>
   <td class="n lt"></td>
+  <td><input name="batch_no" style="width:110px"></td>
   <td><input type="date" name="expiry" style="width:150px"></td>
   <td><textarea name="serials" rows="1" class="serials" style="min-width:170px" placeholder="—"></textarea></td>
   <td><button type="button" class="x" onclick="this.closest('tr').remove();calc()">×</button></td></tr></template>
 {% endblock %}
 {% block scripts %}<script>
 var existing = {{ existing|tojson }};
-function addLine(pid, q, c, x, sn) {
+function addLine(pid, q, c, x, sn, bn) {
   var row = document.getElementById('tpl').content.firstElementChild.cloneNode(true);
   document.getElementById('lines').appendChild(row);
   if (pid) { row.querySelector('select').value = pid; row.querySelector('[name=qty]').value = q; row.querySelector('[name=cost]').value = c;
-    row.querySelector('[name=expiry]').value = x || ''; row.querySelector('[name=serials]').value = sn || ''; }
+    row.querySelector('[name=expiry]').value = x || ''; row.querySelector('[name=serials]').value = sn || ''; row.querySelector('[name=batch_no]').value = bn || ''; }
   serHint(row.querySelector('select')); calc(); return row;
 }
 function serHint(sel) {
   var o = sel.selectedOptions[0], box = sel.closest('tr').querySelector('[name=serials]');
   var on = o && o.dataset.ser === '1';
   box.placeholder = on ? 'one per item' : '—'; box.required = on; box.style.visibility = on ? 'visible' : 'hidden';
+  var med = o && o.dataset.med === '1', tr = sel.closest('tr');
+  tr.querySelector('[name=batch_no]').placeholder = med ? 'needed' : '';  // checked when the purchase is confirmed
 }
 function pick(sel) {
   var cost = sel.closest('tr').querySelector('[name=cost]');
@@ -64,5 +67,5 @@ function calc() {
   document.getElementById('tot').value = fmt(sum - num(document.getElementById('disc').value));
 }
 document.getElementById('disc').addEventListener('input', calc);
-if (existing.length) existing.forEach(function (l) { addLine(l[0], l[1], l[2], l[3], l[4]); }); else { addLine(); addLine(); addLine(); }
+if (existing.length) existing.forEach(function (l) { addLine(l[0], l[1], l[2], l[3], l[4], l[5]); }); else { addLine(); addLine(); addLine(); }
 </script>{% endblock %}

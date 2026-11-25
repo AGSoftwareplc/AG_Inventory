@@ -21,6 +21,13 @@
 <div class="wide"><label>Units of measure for products (comma separated, first one is the default)</label><input name="units" value="{{ setting('units') }}"></div>
 <div class="wide"><label>Receipt footer</label><input name="receipt_footer" value="{{ setting('receipt_footer') }}"></div>
 <div class="wide"><label><input type="checkbox" name="allow_negative" value="1" {{ 'checked' if setting('allow_negative') == '1' }}> Allow selling below zero stock (not recommended)</label></div>
+</div>
+<h2>Pharmacy module</h2>
+<div class="grid">
+<div class="wide"><label><input type="checkbox" name="pharmacy" value="1" {{ 'checked' if setting('pharmacy') == '1' }}> This business is a pharmacy <span class="muted">(medicine details, batch numbers and expiry on receiving, prescriptions and pharmacist verification, expiry alerts, recalls, disposal, controlled-medicine register)</span></label></div>
+<div><label>Prescription valid for (days)</label><input name="rx_valid_days" inputmode="numeric" value="{{ setting('rx_valid_days') }}"></div>
+<div><label>Controlled-medicine prescription valid for (days)</label><input name="rx_controlled_days" inputmode="numeric" value="{{ setting('rx_controlled_days') }}"></div>
+<div><label>Expiry alerts (days, comma separated)</label><input name="expiry_alert_days" value="{{ setting('expiry_alert_days') }}"></div>
 </div><div class="actions"><button>Save</button></div></form>
 <div class="row">
 <div class="card"><h2 style="margin-top:0">Backup</h2>

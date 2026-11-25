@@ -1,0 +1,26 @@
+{% extends 'base.html' %}{% block title %}Recall {{ r.ref_no }}{% endblock %}
+{% block content %}{% include 'pharmacy/_tabs.html' %}
+<div class="head"><h1>Recall {{ r.ref_no }} <span class="badge {{ 'warn' if r.status == 'Open' else 'ok' }}">{{ r.status }}</span></h1>
+<span><a class="btn light" href="{{ url_for('pharmacy.recall', rid=r.id, export=1) }}">Export who received it (Excel)</a></span></div>
+<div class="card grid">
+  <div><label>Medicine</label>{{ r.name }} <span class="muted">{{ r.code }}</span></div><div><label>Batch number</label><b>{{ r.batch_no }}</b></div>
+  <div><label>Source / class</label>{{ r.source }} · {{ r.recall_class }}</div><div><label>Reference</label>{{ r.reference }}</div>
+  <div><label>Date</label>{{ r.date }}</div><div class="wide"><label>Required action</label>{{ r.action }}</div>
+</div>
+<h2>Stock with this batch number (all branches)</h2>
+<div class="card tablewrap" style="padding:0"><table><tr><th>Branch</th><th>Batch</th><th>Expiry</th><th class="n">Received</th><th class="n">Still in stock</th><th>Status</th></tr>
+{% for b in batches %}<tr><td>{{ b.branch }}</td><td>{% if b.branch_id == g.branch.id %}<a href="{{ url_for('inventory.batch', bid=b.id) }}">#{{ b.id }}</a>{% else %}#{{ b.id }}{% endif %}</td><td>{{ b.expiry or '' }}</td><td class="n">{{ b.qty|qty }}</td><td class="n">{{ b.remaining|qty }} {{ r.unit }}</td><td>{{ b.status }}</td></tr>
+{% else %}<tr><td colspan="6" class="muted">No stock with this batch number.</td></tr>{% endfor %}</table></div>
+<p class="muted">Recalled stock: send it back with <b>Return to supplier</b> on its purchase, or <b>Dispose</b> of it from the batch page.</p>
+<h2>Who received it <span class="badge warn">{{ trace|length }} sale(s)</span></h2>
+<div class="card tablewrap" style="padding:0"><table><tr><th>Receipt</th><th>Date</th><th>Branch</th><th>Customer</th><th>Patient</th><th class="n">Qty</th><th class="n">Contacted</th></tr>
+{% for t in trace %}<tr><td>{{ t.receipt_no }}</td><td>{{ t.date }}</td><td>{{ t.branch }}</td><td>{{ t.customer or 'Walk-in' }} {{ t.customer_phone or '' }}</td><td>{{ t.patient or '' }} {{ t.patient_phone or '' }}</td><td class="n">{{ t.qty|qty }}</td><td class="n">{{ t.contacts }}</td></tr>
+{% else %}<tr><td colspan="7" class="muted">Nobody received this batch.</td></tr>{% endfor %}</table></div>
+{% if trace %}<form method="post" class="card filters">{{ csrf() }}
+<div><label>Sale</label><select name="sale_id">{% for t in trace %}<option value="{{ t.id }}">{{ t.receipt_no }} · {{ t.patient or t.customer or 'Walk-in' }}</option>{% endfor %}</select></div>
+<div class="grow"><label>Notification attempt</label><input name="note" placeholder="e.g. phoned, asked to bring the medicine back"></div>
+<div style="flex:0"><button class="light">Record</button></div></form>{% endif %}
+{% if contacts %}<div class="card tablewrap" style="padding:0"><table><tr><th>When</th><th>Receipt</th><th>Note</th><th>By</th></tr>
+{% for c in contacts %}<tr><td>{{ c.at }}</td><td>{{ c.receipt_no or '' }}</td><td>{{ c.note }}</td><td>{{ c.username }}</td></tr>{% endfor %}</table></div>{% endif %}
+{% if r.status == 'Open' %}<form method="post">{{ csrf() }}<button name="close" value="1" class="light">Close this recall</button></form>{% endif %}
+{% endblock %}

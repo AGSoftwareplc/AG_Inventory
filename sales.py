@@ -38,7 +38,20 @@ def api_products():
     if not rows:
         rows = db.execute(f'SELECT {cols} FROM pv WHERE active=1 AND (name LIKE ? OR code LIKE ?) ORDER BY name '
                           'LIMIT 15', (f'%{q}%', f'{q}%')).fetchall()
-    return jsonify({'exact': exact, 'items': [dict(r) for r in rows]})
+    return jsonify({'exact': exact, 'items': [_tag(db, r) for r in rows]})
+
+
+def _tag(db, r):
+    """Pharmacy: show the class and cold chain beside the name at the POS (prescription medicines are sold from
+    Pharmacy → Prescriptions; the sale is refused here)."""
+    d = dict(r)
+    if rules.pharmacy():
+        m = rules.medicine(db, r['id'])
+        if m:
+            d['name'] += (f" [{m['rx_class']}: prescription]" if m['rx_class'] != 'OTC' else '') + \
+                (' ❄' if m['storage'] and m['storage'][0] in '2F' else '')
+            d['rx_class'] = m['rx_class']
+    return d
 
 
 @bp.route('/api/serials')

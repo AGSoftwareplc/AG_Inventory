@@ -22,6 +22,21 @@
   <div class="wide"><label><input type="checkbox" name="serial_tracked" value="1" {{ 'checked' if (f.serial_tracked if f.get('code') is not none else (p and p.serial_tracked)) }}> Track serial numbers <span class="muted">(each item has its own serial number, e.g. phones, laptops: needed when buying and selling)</span></label></div>
   {% if p %}<div><label><input type="checkbox" name="active" value="1" {{ 'checked' if p.active }}> Active (can be sold and purchased)</label></div>{% endif %}
 </div>
+{% if setting('pharmacy') == '1' %}{% macro mv(k, default='') %}{{ f.get(k) if f.get(k) is not none else (med[k] if med and med[k] is not none else default) }}{% endmacro %}
+<h2>Medicine details</h2>
+<label class="inline"><input type="checkbox" name="is_medicine" value="1" {{ 'checked' if (f.is_medicine if f.get('code') is not none else (med or not p)) }}> This product is a medicine <span class="muted">(untick for general goods, e.g. cosmetics)</span></label>
+<div class="grid">
+  <div><label>Generic name *</label><input name="generic_name" value="{{ mv('generic_name') }}" placeholder="e.g. Amoxicillin"></div>
+  <div><label>Strength / concentration</label><input name="strength" value="{{ mv('strength') }}" placeholder="e.g. 500 mg, 250 mg/5 ml"></div>
+  <div><label>Dosage form</label><select name="dosage_form"><option value=""></option>{% for d in dosage_forms %}<option {{ 'selected' if mv('dosage_form') == d }}>{{ d }}</option>{% endfor %}</select></div>
+  <div><label>Brand</label><input name="brand" value="{{ mv('brand') }}"></div>
+  <div><label>Manufacturer</label><input name="manufacturer" value="{{ mv('manufacturer') }}"></div>
+  <div><label>Regulatory class *</label><select name="rx_class">{% for c in rx_classes %}<option value="{{ c }}" {{ 'selected' if mv('rx_class', 'OTC') == c }}>{{ rx_labels[c] }}</option>{% endfor %}</select></div>
+  <div><label>Storage</label><select name="storage">{% for s in storage %}<option {{ 'selected' if mv('storage', storage[0]) == s }}>{{ s }}</option>{% endfor %}</select></div>
+  <div><label>EFDA registration no.</label><input name="reg_no" value="{{ mv('reg_no') }}"></div>
+  <div><label>Registration expiry</label><input type="date" name="reg_expiry" value="{{ mv('reg_expiry') }}"></div>
+</div>
+<p class="muted">Prescription-only (POM), narcotic, psychotropic and precursor medicines can only be sold from a verified prescription. A medicine whose registration has expired cannot be bought or sold.</p>{% endif %}
 <div class="actions"><button>Save product</button> <a class="btn light" href="{{ url_for('products.index') }}">Cancel</a></div>
 </form>
 {% if p %}<form method="post" action="{{ url_for('products.delete', pid=p.id) }}" onsubmit="return confirm('Delete this product permanently?')">{{ csrf() }}<button class="light small">Delete product (only if it was never used)</button></form>{% endif %}

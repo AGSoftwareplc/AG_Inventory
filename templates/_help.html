@@ -154,6 +154,23 @@
 </ol>
 </section>
 
+<section id="help-pharmacy" data-title="Pharmacy">
+<h2>Pharmacy module</h2>
+<p>For a business that is a pharmacy. An administrator switches it on in <b>Admin → Business profile &amp; settings → Pharmacy module</b>. With it off, nothing below is shown. Everything else (purchases, POS, receipts, batches, branches, reports) works as usual.</p>
+<ul>
+  <li><b>Medicines:</b> on the product form, tick <i>This product is a medicine</i> and fill in the generic name, strength, dosage form, brand, manufacturer, <b>class</b> (OTC, prescription only, narcotic, psychotropic, precursor), storage (❄ = cold chain) and the EFDA registration number and expiry. A medicine whose registration has expired cannot be bought or sold.</li>
+  <li><b>Receiving:</b> every medicine line on a purchase needs its <b>batch number</b> and <b>expiry date</b>. Expired stock cannot be received.</li>
+  <li><b>Selling:</b> stock is taken from the batch that expires first (FEFO). <b>Expired, recalled, quarantined or damaged batches are never sold.</b> OTC medicines are sold at the POS as usual. Prescription-only and controlled medicines are refused at the POS: they are sold from a prescription.</li>
+  <li><b>Prescriptions</b> (<b>Pharmacy → Prescriptions</b>): 1) register it: patient, prescriber, medicines with dose, frequency and duration, and a scan (required for controlled medicines, with the EFDA form serial). 2) a <b>pharmacist verifies</b> it: allergy and duplicate-therapy warnings appear and need a reason to go on, or the pharmacist rejects it. 3) the pharmacist <b>dispenses</b>: all or part of the quantities, with payment. This makes a normal sale and receipt, and prints the <b>dispensing labels</b>. Controlled medicines need a second person to confirm with their own username and password. A prescription can be dispensed for 30 days (7 for controlled medicines), set in Admin settings.</li>
+  <li><b>Pharmacists:</b> give the user the <i>Pharmacist</i> role (or the <i>Verify and dispense</i> permission) and, in Admin → Users, their <b>licence number and expiry</b>. Without a valid licence they cannot verify or dispense. A warning shows 30 days before it expires.</li>
+  <li><b>Patients</b> are the people the medicine is for (age, sex, weight, which is required under 12, allergies, pregnancy, conditions), kept apart from paying customers. Their prescription history is shown to pharmacists and administrators only, and every view is logged.</li>
+  <li><b>Customer returns</b> of medicines go into a <b>Quarantined</b> batch. A pharmacist inspects it and sets it back to Available, or disposes of it, on the batch page.</li>
+  <li><b>Expiry &amp; batches:</b> expired stock, stock expiring within 30, 60 and 90 days, blocked batches, and registrations expiring within 60 days. A yellow bar at the top warns about expired and soon-expiring batches.</li>
+  <li><b>Recalls:</b> register the medicine and batch number. That batch is blocked in every branch, and the page lists every sale, customer and patient (with phone) that received it, to export and to record each call.</li>
+  <li><b>Disposal:</b> from a batch, record the quantity, method, reason, two witnesses (one a pharmacist) and the certificate. The stock is written off. Disposals of controlled medicines form the destruction register.</li>
+  <li><b>Controlled register:</b> for each narcotic or psychotropic medicine, every movement in and out with the running balance, patient, prescriber and pharmacist. It cannot be edited. Print it for the periodic report, and check the balance with a stocktake at least weekly.</li>
+</ul>
+</section>
 <section id="help-expenses" data-title="Expenses">
 <h2>Expenses</h2>
 <p>Record running costs such as rent, electricity, salary or transport: choose the category, amount, date and payment method. You can add new categories on the same page.</p>

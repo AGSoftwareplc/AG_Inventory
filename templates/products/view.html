@@ -11,12 +11,16 @@
   <div class="tile"><div class="k">Stock value</div><div class="v">{{ (p.stock * p.avg_cost)|money }}</div></div>{% endif %}
 </div>
 <div class="card"><p><b>Category:</b> {{ p.cat or '-' }} · <b>Unit:</b> {{ p.unit }} · <b>Barcode:</b> {{ p.barcode or '-' }} · <b>Status:</b> {{ 'Active' if p.active else 'Inactive' }}
-{% if p.serial_tracked %} · <b>Serial numbers in stock:</b> {{ in_stock_sn }} of {{ p.stock|qty }}{% endif %}</p>{% if p.description %}<p>{{ p.description }}</p>{% endif %}</div>
+{% if p.serial_tracked %} · <b>Serial numbers in stock:</b> {{ in_stock_sn }} of {{ p.stock|qty }}{% endif %}</p>{% if p.description %}<p>{{ p.description }}</p>{% endif %}
+{% if med %}<p><span class="badge {{ 'err' if med.rx_class in ('Narcotic', 'Psychotropic') else ('warn' if med.rx_class != 'OTC' else 'ok') }}">{{ med.rx_class }}</span>
+<b>Generic:</b> {{ med.generic_name }} · <b>Strength:</b> {{ med.strength or '-' }} · <b>Form:</b> {{ med.dosage_form or '-' }} · <b>Brand:</b> {{ med.brand or '-' }} · <b>Manufacturer:</b> {{ med.manufacturer or '-' }}
+· <b>Storage:</b> {% if med.storage and med.storage[0] in '2F' %}<span class="badge warn">❄ {{ med.storage }}</span>{% else %}{{ med.storage or '-' }}{% endif %}
+· <b>EFDA reg.:</b> {{ med.reg_no or '-' }}{% if med.reg_expiry %} until {{ med.reg_expiry }}{% endif %}</p>{% endif %}</div>
 
 <h2>Batches in stock (FIFO order: sold first at the top)</h2>
 <div class="card tablewrap" style="padding:0"><table>
 <tr><th>Batch</th><th>From</th><th>Received</th><th>Expiry</th><th class="n">In stock</th>{% if can('reports') %}<th class="n">Unit cost</th>{% endif %}</tr>
-{% for b in batches %}<tr><td><a href="{{ url_for('inventory.batch', bid=b.id) }}">#{{ b.id }}</a></td><td>{{ b.ref_no }}</td><td>{{ b.received }}</td><td>{{ b.expiry or '' }}</td><td class="n">{{ b.remaining|qty }} {{ p.unit }}</td>{% if can('reports') %}<td class="n">{{ b.unit_cost|money }}</td>{% endif %}</tr>
+{% for b in batches %}<tr><td><a href="{{ url_for('inventory.batch', bid=b.id) }}">#{{ b.id }}</a> {{ b.batch_no }}{% if b.status != 'Available' %} <span class="badge err">{{ b.status }}</span>{% endif %}</td><td>{{ b.ref_no }}</td><td>{{ b.received }}</td><td>{{ b.expiry or '' }}</td><td class="n">{{ b.remaining|qty }} {{ p.unit }}</td>{% if can('reports') %}<td class="n">{{ b.unit_cost|money }}</td>{% endif %}</tr>
 {% else %}<tr><td colspan="6" class="muted">No stock in this branch.</td></tr>{% endfor %}
 </table></div>
 

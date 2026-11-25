@@ -1,0 +1,14 @@
+{% extends 'base.html' %}{% block title %}Prescriptions{% endblock %}
+{% block content %}{% include 'pharmacy/_tabs.html' %}
+<div class="head"><h1>Prescriptions</h1><a class="btn" href="{{ url_for('pharmacy.rx_new') }}">+ Register prescription</a></div>
+<form class="filters">
+  <div class="grow"><label>Patient, phone or number</label><input name="q" value="{{ q }}"></div>
+  <div><label>Status</label><select name="status"><option value="open" {{ 'selected' if st == 'open' }}>Open (to verify / dispense)</option><option value="" {{ 'selected' if not st }}>All</option>
+  {% for s in statuses %}<option {{ 'selected' if st == s }}>{{ s }}</option>{% endfor %}</select></div>
+  <div style="flex:0"><button>Show</button></div></form>
+<div class="card tablewrap" style="padding:0"><table><tr><th>Ref.</th><th>Rx no.</th><th>Date</th><th>Patient</th><th>Prescriber</th><th>Status</th></tr>
+{% for r in rows %}<tr><td><a href="{{ url_for('pharmacy.rx_view', rid=r.id) }}">{{ r.ref_no }}</a></td><td>{{ r.rx_no }}</td><td>{{ r.date }}</td><td>{{ r.patient }}</td><td>{{ r.prescriber }}</td>
+<td><span class="badge {{ 'ok' if r.shown in ('Verified', 'Dispensed') else ('err' if r.shown in ('Rejected', 'Expired', 'Cancelled') else 'warn') }}">{{ r.shown }}</span></td></tr>
+{% else %}<tr><td colspan="6" class="muted">No prescriptions to show.</td></tr>{% endfor %}</table></div>
+<p class="muted">Steps: <b>register</b> the prescription (anyone with the Pharmacy permission) → a <b>pharmacist verifies</b> it (allergy and duplicate checks) → the pharmacist <b>dispenses</b> (sale, receipt and labels). Prescription-only and controlled medicines cannot be sold at the POS.</p>
+{% endblock %}

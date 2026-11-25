@@ -14,14 +14,15 @@
 <form method="post" action="{{ url_for('purchases.receive', pur_id=pur.id) }}">{{ csrf() }}{{ once() }}
 <div class="card tablewrap" style="padding:0"><table>
 <tr><th>Product</th><th class="n">Ordered</th><th class="n">Unit cost</th><th class="n">Net unit cost</th><th class="n">Line total</th><th class="n">Received</th><th class="n">Returned</th>
-{% if st == 'Draft' %}<th>Expiry</th>{% endif %}
-{% if st in ('Confirmed','Partially Received') and can('receive') %}<th class="n">Receive now</th><th>Expiry date <span class="muted">(optional)</span></th><th>Serial numbers</th>{% endif %}</tr>
+{% if st == 'Draft' %}<th>Batch no.</th><th>Expiry</th>{% endif %}
+{% if st in ('Confirmed','Partially Received') and can('receive') %}<th class="n">Receive now</th><th>Batch no.</th><th>Expiry date <span class="muted">(optional)</span></th><th>Serial numbers</th>{% endif %}</tr>
 {% for i in items %}{% set left = i.qty - i.received_qty %}
 <tr><td>{{ i.name }} <span class="muted">{{ i.code }}</span></td><td class="n">{{ i.qty|qty }} {{ i.unit }}</td><td class="n">{{ i.unit_cost|money }}</td>
 <td class="n">{{ i.net_cost|money }}</td><td class="n">{{ (i.qty*i.unit_cost)|money }}</td><td class="n">{{ i.received_qty|qty }}</td><td class="n">{{ i.returned_qty|qty }}</td>
-{% if st == 'Draft' %}<td>{{ i.expiry or '' }}</td>{% endif %}
+{% if st == 'Draft' %}<td>{{ i.batch_no }}</td><td>{{ i.expiry or '' }}</td>{% endif %}
 {% if st in ('Confirmed','Partially Received') and can('receive') %}<td class="n">{% if left > 0.0005 %}<input name="r_{{ i.id }}" inputmode="decimal" value="{{ left|qty }}" style="width:100px;text-align:right">{% else %}✓{% endif %}</td>
-<td>{% if left > 0.0005 %}<input type="date" name="x_{{ i.id }}" style="width:150px">{% endif %}</td>
+<td>{% if left > 0.0005 %}<input name="b_{{ i.id }}" value="{{ i.batch_no }}" style="width:110px">{% endif %}</td>
+<td>{% if left > 0.0005 %}<input type="date" name="x_{{ i.id }}" value="{{ i.expiry or '' }}" style="width:150px">{% endif %}</td>
 <td>{% if left > 0.0005 %}<textarea name="s_{{ i.id }}" rows="1" class="serials" placeholder="only for serial-numbered products">{{ i.serials }}</textarea>{% endif %}</td>{% endif %}</tr>
 {% if serials.get(i.id) %}<tr><td colspan="9" class="muted serials">Serial numbers: {% for r in serials[i.id] %}{{ r.serial }}{% if r.status != 'In stock' %} ({{ r.status|lower }}){% endif %}{{ ', ' if not loop.last }}{% endfor %}</td></tr>
 {% elif st == 'Draft' and i.serials %}<tr><td colspan="9" class="muted serials">Serial numbers: {{ i.serials|replace('\n', ', ') }}</td></tr>{% endif %}
@@ -70,8 +71,8 @@
 
 {% if pays %}<h2>Payments to supplier</h2><div class="card tablewrap" style="padding:0"><table><tr><th>Date</th><th>Method</th><th>TT No. / reference</th><th class="n">Amount</th><th>By</th></tr>
 {% for p in pays %}<tr><td>{{ p.date }}</td><td>{{ p.method }}</td><td>{{ p.reference }}</td><td class="n">{{ p.amount|money }}</td><td>{{ p.username }}</td></tr>{% endfor %}</table></div>{% endif %}
-{% if batches %}<h2>Stock batches from this purchase</h2><div class="card tablewrap" style="padding:0"><table><tr><th>Batch</th><th>Product</th><th>Received</th><th>Expiry</th><th class="n">Qty in</th><th class="n">Still in stock</th><th class="n">Unit cost</th></tr>
-{% for b in batches %}<tr><td><a href="{{ url_for('inventory.batch', bid=b.id) }}">#{{ b.id }}</a></td><td>{{ b.name }}</td><td>{{ b.received }}</td><td>{{ b.expiry or '' }}</td><td class="n">{{ b.qty|qty }} {{ b.unit }}</td><td class="n">{{ b.remaining|qty }}</td><td class="n">{{ b.unit_cost|money }}</td></tr>{% endfor %}</table></div>{% endif %}
+{% if batches %}<h2>Stock batches from this purchase</h2><div class="card tablewrap" style="padding:0"><table><tr><th>Batch</th><th>Batch no.</th><th>Product</th><th>Received</th><th>Expiry</th><th class="n">Qty in</th><th class="n">Still in stock</th><th class="n">Unit cost</th></tr>
+{% for b in batches %}<tr><td><a href="{{ url_for('inventory.batch', bid=b.id) }}">#{{ b.id }}</a></td><td>{{ b.batch_no }}</td><td>{{ b.name }}</td><td>{{ b.received }}</td><td>{{ b.expiry or '' }}</td><td class="n">{{ b.qty|qty }} {{ b.unit }}</td><td class="n">{{ b.remaining|qty }}</td><td class="n">{{ b.unit_cost|money }}</td></tr>{% endfor %}</table></div>{% endif %}
 {% if rets %}<h2>Supplier returns</h2><div class="card tablewrap" style="padding:0"><table><tr><th>Return no.</th><th>Date</th><th>Product</th><th class="n">Qty</th><th class="n">Credit</th><th>Reason</th><th>By</th></tr>
 {% for r in rets %}<tr><td>{{ r.doc_no or '' }}</td><td>{{ r.date }}</td><td>{{ r.name }}</td><td class="n">{{ r.qty|qty }}</td><td class="n">{{ r.amount|money }}</td><td>{{ r.reason }}</td><td>{{ r.username }}</td></tr>{% endfor %}</table></div>{% endif %}
 {% endblock %}

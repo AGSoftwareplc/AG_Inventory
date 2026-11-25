@@ -1,0 +1,9 @@
+{% extends 'base.html' %}{% block title %}Patients{% endblock %}
+{% block content %}{% include 'pharmacy/_tabs.html' %}
+<div class="head"><h1>Patients</h1><a class="btn" href="{{ url_for('pharmacy.patient') }}">+ New patient</a></div>
+<form class="filters"><div class="grow"><label>Search name or phone</label><input name="q" value="{{ q }}"></div><div style="flex:0"><button>Search</button></div></form>
+<div class="card tablewrap" style="padding:0"><table><tr><th>Name</th><th>Phone</th><th>Age</th><th>Sex</th><th>Allergies</th></tr>
+{% for r in rows %}<tr><td><a href="{{ url_for('pharmacy.patient', pid=r.id) }}">{{ r.name }}</a></td><td>{{ r.phone }}</td><td>{{ age(r) if age(r) is not none }}</td><td>{{ r.sex }}</td>
+<td>{% if r.allergies %}<span class="badge err">{{ r.allergies }}</span>{% endif %}</td></tr>
+{% else %}<tr><td colspan="5" class="muted">No patients yet.</td></tr>{% endfor %}</table></div>
+{% endblock %}

@@ -248,7 +248,7 @@ def r_moves(db, s, e, f, types=None):
 
 
 def r_writeoffs(db, s, e, f):
-    return r_moves(db, s, e, f, ['damaged', 'expired', 'lost'])
+    return r_moves(db, s, e, f, ['damaged', 'expired', 'lost', 'disposal'])
 
 
 def r_stocktake(db, s, e, f):
@@ -472,7 +472,7 @@ def r_profit(db, s, e, f):
             {'item': 'Less: operating expenses', 'amount': -p['expenses']},
             {'item': 'Estimated net operating profit', 'amount': p['net_profit']}]
     wo = db.execute("SELECT COALESCE(SUM(-qty*unit_cost),0) FROM stock_moves WHERE move_type IN "
-                    "('damaged','expired','lost') AND date(at) BETWEEN ? AND ?", (s, e)).fetchone()[0]
+                    "('damaged','expired','lost','disposal') AND date(at) BETWEEN ? AND ?", (s, e)).fetchone()[0]
     rows.append({'item': 'Note: stock written off (damaged/expired/lost, not included above)', 'amount': wo})
     return [('Item', 'item', T), ('Amount', 'amount', S)], rows
 
@@ -826,7 +826,7 @@ def daily_blocks(db, s, e, fl):
     inv = [dict(r) for r in db.execute(
         f"SELECT p.code||' - '||p.name AS grp, {q(('purchase', 'opening', 'transfer_in'))} AS received, "
         f"{q(('sale',), -1)} AS sold, {q(('sale_return', 'sale_cancel'))} AS cust_ret, "
-        f"{q(('purchase_return',), -1)} AS sup_ret, {q(('damaged', 'expired', 'lost'), -1)} AS written_off, "
+        f"{q(('purchase_return',), -1)} AS sup_ret, {q(('damaged', 'expired', 'lost', 'disposal'), -1)} AS written_off, "
         f"{q(('correction', 'stocktake', 'transfer_out', 'transfer_cancel'))} AS adjusted, p.stock FROM stock_moves m "
         "JOIN products p ON p.id=m.product_id WHERE date(m.at) BETWEEN ? AND ? AND m.move_type<>'batch_open' "
         'GROUP BY p.id ORDER BY p.name', (s, e))]
@@ -843,7 +843,7 @@ def daily_blocks(db, s, e, fl):
         {'item': 'Stock returned by customers / cancelled sales', 'q': tot.get('cust_ret', 0), 'v': None},
         {'item': 'Stock returned to suppliers', 'q': tot.get('sup_ret', 0), 'v': None},
         {'item': 'Damaged, expired and lost', 'q': tot.get('written_off', 0), 'v': db.execute(
-            "SELECT COALESCE(SUM(-qty*unit_cost),0) FROM stock_moves WHERE move_type IN ('damaged','expired','lost') "
+            "SELECT COALESCE(SUM(-qty*unit_cost),0) FROM stock_moves WHERE move_type IN ('damaged','expired','lost','disposal') "
             'AND date(at) BETWEEN ? AND ?', (s, e)).fetchone()[0]},
         {'item': 'Stock adjustments, stocktakes and transfers (+/−)', 'q': tot.get('adjusted', 0), 'v': None},
         {'item': 'Remaining stock now (all products)', 'q': stock_now['q'], 'v': stock_now['v']}], {}))

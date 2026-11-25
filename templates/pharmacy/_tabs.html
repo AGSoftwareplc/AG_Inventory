@@ -1,0 +1,11 @@
+{% set ep = request.endpoint or '' %}
+{% set tabs = [
+  ('pharmacy.prescriptions', 'Prescriptions', can('pharmacy') or can('dispense'), ep.startswith('pharmacy.rx') or ep in ('pharmacy.prescriptions', 'pharmacy.label')),
+  ('pharmacy.patients', 'Patients', can('pharmacy') or can('dispense'), ep.startswith('pharmacy.patient')),
+  ('pharmacy.prescribers', 'Prescribers', can('pharmacy') or can('dispense'), ep == 'pharmacy.prescribers'),
+  ('pharmacy.expiry', 'Expiry & batches', can('inventory'), ep == 'pharmacy.expiry'),
+  ('pharmacy.recalls', 'Recalls', can('adjust') or can('dispense'), ep.startswith('pharmacy.recall')),
+  ('pharmacy.disposals', 'Disposals', can('adjust') or can('inventory'), ep in ('pharmacy.disposals', 'pharmacy.dispose')),
+  ('pharmacy.controlled', 'Controlled register', can('dispense') or can('reports'), ep == 'pharmacy.controlled'),
+] %}
+<div class="actions noprint" style="margin:0 0 1rem">{% for e, l, ok, on in tabs if ok %}<a class="btn {{ '' if on else 'light' }} small" href="{{ url_for(e) }}">{{ l }}</a> {% endfor %}</div>

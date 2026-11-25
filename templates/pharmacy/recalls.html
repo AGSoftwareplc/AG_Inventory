@@ -1,0 +1,19 @@
+{% extends 'base.html' %}{% block title %}Recalls{% endblock %}
+{% block content %}{% include 'pharmacy/_tabs.html' %}
+<h1>Recalls</h1>
+{% if can('adjust') or can('dispense') %}<form method="post" class="card">{{ csrf() }}{{ once() }}<h2 style="margin-top:0">Register a recall</h2>
+<div class="grid">
+  <div><label>Medicine *</label><select name="product_id" required><option value="">Choose…</option>{% for p in products %}<option value="{{ p.id }}">{{ p.name }} ({{ p.code }})</option>{% endfor %}</select></div>
+  <div><label>Batch number *</label><input name="batch_no" required></div>
+  <div><label>Source</label><select name="source">{% for s in ['EFDA', 'Manufacturer', 'Supplier'] %}<option>{{ s }}</option>{% endfor %}</select></div>
+  <div><label>Recall class</label><select name="recall_class">{% for s in ['Class I', 'Class II', 'Class III'] %}<option>{{ s }}</option>{% endfor %}</select></div>
+  <div><label>Reference (letter / notice no.)</label><input name="reference"></div>
+  <div><label>Date</label><input type="date" name="date" value="{{ today }}"></div>
+  <div class="wide"><label>Required action</label><input name="action" placeholder="e.g. stop sale, return to supplier, contact patients"></div>
+</div>
+<div class="actions"><button>Register recall (blocks the batch in every branch)</button></div></form>{% endif %}
+<div class="card tablewrap" style="padding:0"><table><tr><th>Ref.</th><th>Date</th><th>Medicine</th><th>Batch no.</th><th>Source</th><th>Class</th><th>Status</th></tr>
+{% for r in rows %}<tr><td><a href="{{ url_for('pharmacy.recall', rid=r.id) }}">{{ r.ref_no }}</a></td><td>{{ r.date }}</td><td>{{ r.name }}</td><td>{{ r.batch_no }}</td><td>{{ r.source }}</td><td>{{ r.recall_class }}</td>
+<td><span class="badge {{ 'warn' if r.status == 'Open' else 'ok' }}">{{ r.status }}</span></td></tr>
+{% else %}<tr><td colspan="7" class="muted">No recalls.</td></tr>{% endfor %}</table></div>
+{% endblock %}

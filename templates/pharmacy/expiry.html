@@ -1,0 +1,24 @@
+{% extends 'base.html' %}{% block title %}Expiry & batches{% endblock %}
+{% macro brow(b, extra='') %}<td><a href="{{ url_for('products.view', pid=b.product_id) }}">{{ b.name }}</a> <span class="muted">{{ b.code }}</span></td>
+<td><a href="{{ url_for('inventory.batch', bid=b.id) }}">#{{ b.id }}</a> {{ b.batch_no }}</td><td>{{ b.expiry or '' }}</td><td class="n">{{ b.remaining|qty }} {{ b.unit }}</td>
+<td>{% if b.status != 'Available' %}<span class="badge err">{{ b.status }}</span>{% endif %}{{ extra }}</td>
+<td>{% if can('adjust') %}<a href="{{ url_for('pharmacy.dispose', bid=b.id) }}">Dispose</a>{% endif %}</td>{% endmacro %}
+{% block content %}{% include 'pharmacy/_tabs.html' %}
+<h1>Expiry &amp; batches</h1>
+<p class="muted">Expired, recalled, quarantined and damaged batches can never be sold. Near-expiry stock: return it to the supplier, transfer it to a branch that sells it faster, or sell it first.</p>
+<h2>Expired, still in stock <span class="badge {{ 'err' if expired else 'ok' }}">{{ expired|length }}</span></h2>
+<div class="card tablewrap" style="padding:0"><table><tr><th>Medicine</th><th>Batch</th><th>Expiry</th><th class="n">In stock</th><th>Status</th><th></th></tr>
+{% for b in expired %}<tr class="low">{{ brow(b) }}</tr>{% else %}<tr><td colspan="6" class="muted">Nothing expired in stock.</td></tr>{% endfor %}</table></div>
+<h2>Expiring within {{ bands[-1] }} days</h2>
+<div class="card tablewrap" style="padding:0"><table><tr><th>Medicine</th><th>Batch</th><th>Expiry</th><th class="n">In stock</th><th>Alert</th><th></th></tr>
+{% for b, band, days in soon %}<tr>{{ brow(b, (days ~ ' days left (' ~ band ~ '-day alert)')) }}</tr>
+{% else %}<tr><td colspan="6" class="muted">Nothing expires within {{ bands[-1] }} days.</td></tr>{% endfor %}</table></div>
+{% if soon %}<p class="muted">{% for band in bands %}{% set n = soon|selectattr('1', 'equalto', band)|list|length %}Within {{ band }} days: <b>{{ n }}</b>{{ ' · ' if not loop.last }}{% endfor %}</p>{% endif %}
+<h2>Blocked batches (quarantined, recalled, damaged)</h2>
+<div class="card tablewrap" style="padding:0"><table><tr><th>Medicine</th><th>Batch</th><th>Expiry</th><th class="n">In stock</th><th>Status</th><th></th></tr>
+{% for b in blocked %}<tr>{{ brow(b) }}</tr>{% else %}<tr><td colspan="6" class="muted">No blocked batches.</td></tr>{% endfor %}</table></div>
+<h2>EFDA registrations expired or expiring within 60 days</h2>
+<div class="card tablewrap" style="padding:0"><table><tr><th>Medicine</th><th>Registration no.</th><th>Expiry</th></tr>
+{% for m in regs %}<tr class="{{ 'low' if m.reg_expiry < today }}"><td><a href="{{ url_for('products.view', pid=m.product_id) }}">{{ m.name }}</a></td><td>{{ m.reg_no }}</td><td>{{ m.reg_expiry }}{% if m.reg_expiry < today %} <span class="badge err">expired: cannot be bought or sold</span>{% endif %}</td></tr>
+{% else %}<tr><td colspan="3" class="muted">All registrations are valid for more than 60 days.</td></tr>{% endfor %}</table></div>
+{% endblock %}
