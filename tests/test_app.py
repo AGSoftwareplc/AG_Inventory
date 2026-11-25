@@ -65,19 +65,24 @@ class ShopTest(unittest.TestCase):
         self.post('/suppliers/new', {'name': 'ABC Wholesale', 'phone': '0911'}, once=False)
         return self.one('SELECT id FROM suppliers ORDER BY id DESC')['id']
 
-    def purchase(self, pid, qty, cost, discount='0', confirm=True):
+    def purchase(self, pid, qty, cost, discount='0', confirm=True, expiry='', serials=''):
+        """Save a purchase; with confirm it goes into stock at once (no separate receiving step)."""
         sup = self.supplier()
         data = {'supplier_id': sup, 'date': '2026-11-23', 'pid': [pid], 'qty': [qty], 'cost': [cost],
-                'discount': discount}
+                'discount': discount, 'expiry': [expiry], 'serials': [serials]}
         if confirm:
             data['confirm'] = '1'
         self.post('/purchases/new', data)
         return self.one('SELECT * FROM purchases ORDER BY id DESC')
 
     def receive_all(self, pur):
+        """Older flow: receive a purchase that was confirmed without going into stock (no-op otherwise)."""
         con = self.db()
+        st = con.execute('SELECT status FROM purchases WHERE id=?', (pur['id'],)).fetchone()['status']
         items = con.execute('SELECT * FROM purchase_items WHERE purchase_id=?', (pur['id'],)).fetchall()
         con.close()
+        if st not in ('Confirmed', 'Partially Received'):
+            return None
         return self.post(f"/purchases/{pur['id']}/receive",
                          {f"r_{i['id']}": str(i['qty'] - i['received_qty']) for i in items})
 
@@ -117,7 +122,27 @@ class ShopTest(unittest.TestCase):
         pur = self.purchase(p['id'], '10', '100', confirm=False)
         self.assertEqual(pur['status'], 'Draft')
         self.assertEqual(self.stock(p['id'])['stock'], 0)  # draft does not touch stock
-        self.post(f"/purchases/{pur['id']}/confirm")
+        self.post(f"/purchases/{pur['id']}/confirm")  # U-AC-017: confirming puts it in stock, no receiving step
+        self.assertEqual(self.one('SELECT status FROM purchases WHERE id=?', pur['id'])['status'], 'Received')
+        s = self.stock(p['id'])
+        self.assertEqual((s['stock'], s['avg_cost']), (10, 10000))
+        self.post(f"/purchases/{pur['id']}/confirm")  # a second confirm changes nothing
+        self.assertEqual(self.stock(p['id'])['stock'], 10)
+        pur2 = self.purchase(p['id'], '10', '130', discount='100')
+        s = self.stock(p['id'])
+        self.assertEqual(s['stock'], 20)
+        self.assertAlmostEqual(s['avg_cost'], 11000)  # (10*100 + 10*120) / 20
+        b = self.one('SELECT * FROM stock_batches WHERE purchase_item_id=(SELECT id FROM purchase_items WHERE '
+                     'purchase_id=?)', pur2['id'])
+        self.assertEqual((b['qty'], b['remaining'], b['unit_cost'], b['received']), (10, 10, 12000, self._today()))
+
+    def test_older_confirmed_purchase_can_still_be_received(self):
+        """Purchases confirmed before receiving became automatic can still be received, also in parts."""
+        p = self.product()
+        pur = self.purchase(p['id'], '10', '100', confirm=False)
+        con = self.db()
+        con.execute("UPDATE purchases SET status='Confirmed' WHERE id=?", (pur['id'],))
+        con.close()
         item = self.one('SELECT id FROM purchase_items WHERE purchase_id=?', pur['id'])
         self.post(f"/purchases/{pur['id']}/receive", {f"r_{item['id']}": '4'})
         self.assertEqual(self.one('SELECT status FROM purchases WHERE id=?', pur['id'])['status'], 'Partially Received')
@@ -126,20 +151,19 @@ class ShopTest(unittest.TestCase):
         self.assertEqual(self.stock(p['id'])['stock'], 4)
         self.post(f"/purchases/{pur['id']}/receive", {f"r_{item['id']}": '6'})
         self.assertEqual(self.one('SELECT status FROM purchases WHERE id=?', pur['id'])['status'], 'Received')
-        s = self.stock(p['id'])
-        self.assertEqual((s['stock'], s['avg_cost']), (10, 10000))
-        pur2 = self.purchase(p['id'], '10', '130', discount='100')
-        self.receive_all(pur2)
-        s = self.stock(p['id'])
-        self.assertEqual(s['stock'], 20)
-        self.assertAlmostEqual(s['avg_cost'], 11000)  # (10*100 + 10*120) / 20
+        self.assertEqual(self.stock(p['id'])['stock'], 10)
 
     def test_cancelled_purchase_cannot_receive(self):
         p = self.product()
-        pur = self.purchase(p['id'], '5', '10')
+        pur = self.purchase(p['id'], '5', '10', confirm=False)
         self.post(f"/purchases/{pur['id']}/cancel", {'reason': 'wrong order'})
-        self.receive_all(pur)
+        self.post(f"/purchases/{pur['id']}/confirm")
         self.assertEqual(self.stock(p['id'])['stock'], 0)
+        self.assertEqual(self.one('SELECT status FROM purchases WHERE id=?', pur['id'])['status'], 'Cancelled')
+        pur = self.purchase(p['id'], '5', '10')  # once confirmed (in stock) it cannot be cancelled
+        r = self.post(f"/purchases/{pur['id']}/cancel", {'reason': 'late'}, follow_redirects=True)
+        self.assertIn(b'supplier return', r.data)
+        self.assertEqual(self.stock(p['id'])['stock'], 5)
 
     def test_purchase_return_and_payment(self):
         p = self.stocked_product()
@@ -730,11 +754,8 @@ class ShopTest(unittest.TestCase):
 
     def test_expiring_batch_is_sold_first(self):
         p = self.product()
-        pur = self.purchase(p['id'], '10', '100')
-        self.receive_all(pur)  # no expiry date
-        pur2 = self.purchase(p['id'], '10', '120')
-        item = self.one('SELECT id FROM purchase_items WHERE purchase_id=?', pur2['id'])
-        self.post(f"/purchases/{pur2['id']}/receive", {f"r_{item['id']}": '10', f"x_{item['id']}": '2026-12-31'})
+        self.purchase(p['id'], '10', '100')  # no expiry date
+        self.purchase(p['id'], '10', '120', expiry='2026-12-31')
         b1, b2 = self.batches(p['id'])
         self.assertEqual(b2['expiry'], '2026-12-31')
         self.sell([(p['id'], 4)], tendered='600')
@@ -886,6 +907,271 @@ class ShopTest(unittest.TestCase):
         self.assertIn('500.00', bal)
         sup = self.one('SELECT supplier_id FROM purchases')['supplier_id']
         self.assertIn('FT-1', self.c.get(f'/suppliers/{sup}').data.decode())
+
+
+    # ---------------------------------------------------------------- requirements update v1.1
+    def xlsx_upload(self, kind, header, rows):
+        """An .xlsx file like the ones Excel saves, built with the app's own writer."""
+        from reports import T, xlsx_blocks
+        cols = [(h, str(i), T) for i, h in enumerate(header)]
+        data = xlsx_blocks('', '', [(None, cols, [{str(i): v for i, v in enumerate(r)} for r in rows], {})])
+        return self.post('/products/import', {'kind': kind, 'file': (io.BytesIO(data), f'{kind}.xlsx')},
+                         once=False, content_type='multipart/form-data')
+
+    def test_excel_import_products_and_categories(self):  # U-AC-016
+        self.product()  # P1 exists
+        r = self.c.get('/products/import/template/products.xlsx')
+        self.assertEqual(r.status_code, 200)
+        self.assertIn('xl/worksheets/sheet1.xml', zipfile.ZipFile(io.BytesIO(r.data)).namelist())
+        header = ['Code *', 'Name *', 'Category', 'Unit', 'Barcode', 'Selling price *', 'Purchase cost',
+                  'Opening stock', 'Minimum stock', 'Serial numbers (yes/no)']
+        rows = [['A1', 'Apple juice', 'Juices', 'pcs', '', '45.50', '30', '12', '2', 'no'],
+                ['P1', 'Same code as an existing product', '', '', '', '10', '', '', '', ''],
+                ['A2', 'Phone', 'Phones', 'pcs', '', '12,000', '9000', '', '', 'yes'],
+                ['A1', 'Twice in the file', '', '', '', '5', '', '', '', ''],
+                ['A3', 'Bad price', '', '', '', 'abc', '', '', '', '']]
+        r = self.xlsx_upload('products', header, rows)
+        page = r.data.decode()
+        self.assertIn('Ready to import', page)
+        self.assertEqual(self.one('SELECT COUNT(*) n FROM products')['n'], 1)  # checked, nothing saved yet
+        self.assertIn('already belongs to a product', page)
+        self.assertIn('also in row 2', page)
+        self.assertIn('must be a number', page)
+        good = re.search(r'name="rows" value="([^"]*)"', page).group(1)
+        import html
+        r = self.post('/products/import', {'kind': 'products', 'action': 'save', 'rows': html.unescape(good)},
+                      follow_redirects=True)
+        self.assertIn(b'2 products imported', r.data)
+        a1 = self.one("SELECT p.*, c.name AS cat FROM products p JOIN categories c ON c.id=p.category_id WHERE code='A1'")
+        self.assertEqual((a1['price'], a1['stock'], a1['avg_cost'], a1['cat']), (4550, 12, 3000, 'Juices'))
+        self.assertEqual(self.one("SELECT serial_tracked FROM products WHERE code='A2'")['serial_tracked'], 1)
+        # the rows that were not imported can be downloaded to correct and upload again
+        bad = re.findall(r'name="rows" value="([^"]*)"', page)[1]
+        r = self.post('/products/import/errors', {'kind': 'products', 'rows': html.unescape(bad)}, once=False)
+        sheet = zipfile.ZipFile(io.BytesIO(r.data)).read('xl/worksheets/sheet1.xml').decode()
+        self.assertIn('Bad price', sheet)
+        self.assertNotIn('Apple juice', sheet)
+        # categories from a CSV file
+        csv_data = 'Category name,Active\nSnacks,yes\nJuices,yes\n,\nOld stuff,no\n'.encode()
+        r = self.post('/products/import', {'kind': 'categories', 'file': (io.BytesIO(csv_data), 'cats.csv')},
+                      once=False, content_type='multipart/form-data')
+        page = r.data.decode()
+        self.assertIn('This category already exists', page)
+        good = re.search(r'name="rows" value="([^"]*)"', page).group(1)
+        self.post('/products/import', {'kind': 'categories', 'action': 'save', 'rows': html.unescape(good)})
+        self.assertEqual(self.one("SELECT active FROM categories WHERE name='Old stuff'")['active'], 0)
+        self.assertEqual(self.one("SELECT COUNT(*) n FROM categories WHERE name='Juices'")['n'], 1)
+
+    def test_purchase_return_is_its_own_transaction(self):  # U-AC-018
+        p = self.product()
+        p2 = self.product('P2')
+        sup = self.supplier()
+        self.post('/purchases/new', {'supplier_id': sup, 'date': '2026-11-23', 'pid': [p['id'], p2['id']],
+                                     'qty': ['10', '5'], 'cost': ['100', '50'], 'confirm': '1'})
+        pur = self.one('SELECT * FROM purchases')
+        i1, i2 = [r['id'] for r in self.db().execute('SELECT id FROM purchase_items ORDER BY id')]
+        r = self.post(f"/purchases/{pur['id']}/return", {f'q_{i1}': '11', f'why_{i1}': 'too many'}, follow_redirects=True)
+        self.assertIn(b'can be returned', r.data)  # more than received: refused, nothing saved
+        self.assertIsNone(self.one('SELECT * FROM purchase_returns'))
+        self.post(f"/purchases/{pur['id']}/return", {f'q_{i1}': '2', f'why_{i1}': 'broken', f'q_{i2}': '1',
+                                                     f'why_{i2}': 'wrong size', 'date': '2026-11-24'})
+        doc = self.one('SELECT * FROM purchase_returns')
+        self.assertTrue(doc['ref_no'].endswith('PR-000001'))
+        self.assertEqual((doc['purchase_id'], doc['amount']), (pur['id'], 25000))
+        self.assertEqual(self.one('SELECT COUNT(*) n FROM returns WHERE return_id=?', doc['id'])['n'], 2)
+        self.assertEqual((self.stock(p['id'])['stock'], self.stock(p2['id'])['stock']), (8, 4))
+        self.assertEqual(self.one('SELECT returned_value FROM purchases')['returned_value'], 25000)
+        self.assertIn(doc['ref_no'], self.c.get(f"/purchases/{pur['id']}").data.decode())
+        self.assertIn(doc['ref_no'], self.c.get('/reports/?r=purchase_returns&start=2000-01-01&end=2100-01-01').data.decode())
+        # a draft purchase cannot have returns
+        draft = self.purchase(p['id'], '3', '100', confirm=False)
+        it = self.one('SELECT id FROM purchase_items WHERE purchase_id=?', draft['id'])['id']
+        self.post(f"/purchases/{draft['id']}/return", {f'q_{it}': '1', f'why_{it}': 'x'})
+        self.assertEqual(self.one('SELECT COUNT(*) n FROM purchase_returns')['n'], 1)
+
+    def test_serial_numbers(self):  # U-AC-021
+        p = self.product('PH', price='1000')
+        con = self.db()
+        con.execute('UPDATE products SET serial_tracked=1 WHERE id=?', (p['id'],))
+        con.close()
+        self.assertIsNone(self.purchase(p['id'], '3', '700', serials='SN1, SN2'))  # 2 serials for 3 phones: refused
+        self.assertEqual(self.stock(p['id'])['stock'], 0)
+        draft = self.purchase(p['id'], '3', '700', serials='SN1, SN2', confirm=False)  # a draft may be incomplete
+        self.post(f"/purchases/{draft['id']}/confirm")
+        self.assertEqual(self.one('SELECT status FROM purchases')['status'], 'Draft')
+        self.post(f"/purchases/{draft['id']}/edit", {'supplier_id': draft['supplier_id'], 'date': '2026-11-23',
+                                                     'pid': [p['id']], 'qty': ['3'], 'cost': ['700'],
+                                                     'serials': ['SN1\nSN2\nSN3'], 'confirm': '1'})
+        pur = self.one('SELECT * FROM purchases')
+        self.assertEqual(pur['status'], 'Received')
+        self.assertEqual(self.stock(p['id'])['stock'], 3)
+        sn = {r['serial']: r for r in self.db().execute('SELECT * FROM serials')}
+        self.assertEqual(sorted(sn), ['SN1', 'SN2', 'SN3'])
+        self.assertTrue(all(r['status'] == 'In stock' and r['purchase_id'] == pur['id'] and r['batch_id'] for r in sn.values()))
+        # the same serial cannot be registered twice, not even for another product
+        p2 = self.product('PH2')
+        con = self.db()
+        con.execute('UPDATE products SET serial_tracked=1 WHERE id=?', (p2['id'],))
+        con.close()
+        self.purchase(p2['id'], '1', '700', serials='sn2')
+        self.assertEqual(self.stock(p2['id'])['stock'], 0)
+        # selling needs a valid serial for every item
+        self.post('/sales/pos', {'items': f'[{{"id": {p["id"]}, "qty": 1}}]', 'tendered': '', 'method': 'Cash'})
+        self.assertIsNone(self.one('SELECT * FROM sales'))
+        self.post('/sales/pos', {'items': f'[{{"id": {p["id"]}, "qty": 1, "serials": ["NOPE"]}}]', 'method': 'Cash'})
+        self.assertIsNone(self.one('SELECT * FROM sales'))
+        self.post('/sales/pos', {'items': f'[{{"id": {p["id"]}, "qty": 2, "serials": ["SN1", "SN3"]}}]',
+                                 'tendered': '2000', 'method': 'Cash'})
+        sale = self.one('SELECT * FROM sales')
+        self.assertEqual(self.stock(p['id'])['stock'], 1)
+        self.assertEqual(self.one("SELECT status FROM serials WHERE serial='SN1'")['status'], 'Sold')
+        self.post('/sales/pos', {'items': f'[{{"id": {p["id"]}, "qty": 1, "serials": ["SN1"]}}]',
+                                 'tendered': '1000', 'method': 'Cash'})  # already sold
+        self.assertEqual(self.one('SELECT COUNT(*) n FROM sales')['n'], 1)
+        self.assertIn('SN1', self.c.get(f"/sales/{sale['id']}/receipt").data.decode())
+        # scanning a serial at the POS finds its product
+        self.assertEqual(self.c.get('/sales/api/products?q=SN2').get_json()['items'][0]['serial'], 'SN2')
+        # customer return: the serial comes back into stock
+        item = self.one('SELECT id FROM sale_items')['id']
+        self.post(f"/sales/{sale['id']}/return", {'item_id': item, 'qty': '1', 'reason': 'faulty', 'serials': 'SN2'})
+        self.assertEqual(self.one('SELECT returned_qty FROM sale_items')['returned_qty'], 0)  # SN2 was not sold here
+        self.post(f"/sales/{sale['id']}/return", {'item_id': item, 'qty': '1', 'reason': 'faulty', 'serials': 'sn3'})
+        self.assertEqual(self.one("SELECT status FROM serials WHERE serial='SN3'")['status'], 'In stock')
+        # supplier return of a serial-numbered item
+        pi = self.one('SELECT id FROM purchase_items WHERE purchase_id=?', pur['id'])['id']
+        self.post(f"/purchases/{pur['id']}/return", {f'q_{pi}': '1', f'why_{pi}': 'dead', f'sn_{pi}': 'SN3'})
+        self.assertEqual(self.one("SELECT status FROM serials WHERE serial='SN3'")['status'], 'Returned to supplier')
+        # cancelling the sale puts SN1 back
+        self.post(f"/sales/{sale['id']}/cancel", {'reason': 'x'})
+        self.assertEqual(self.one("SELECT status FROM serials WHERE serial='SN1'")['status'], 'Sold')  # has a return: refused
+        events = [r['event'] for r in self.db().execute(
+            "SELECT e.event FROM serial_events e JOIN serials s ON s.id=e.serial_id WHERE s.serial='SN3' ORDER BY e.id")]
+        self.assertEqual(events, ['Purchased', 'Sold', 'Customer return', 'Returned to supplier'])
+        for url in (f"/products/{p['id']}?tab=serials", '/products/serial/SN3', f"/products/{p['id']}?tab=sales",
+                    '/reports/?r=serials'):
+            self.assertEqual(self.c.get(url).status_code, 200, url)
+        # stock on hand can be given serial numbers (e.g. after switching tracking on)
+        self.post('/inventory/adjust', {'mode': 'add', 'product_id': p['id'], 'qty': '1', 'reason': 'found'}, once=False)
+        self.post('/inventory/adjust', {'mode': 'remove', 'kind': 'lost', 'product_id': p['id'], 'qty': '2',
+                                        'reason': 'gone'}, once=False)  # SN2 is numbered: name it
+        self.assertEqual(self.stock(p['id'])['stock'], 2)
+        self.post(f"/products/{p['id']}/serials", {'serials': 'SN9'}, once=False)
+        self.assertEqual(self.one("SELECT status FROM serials WHERE serial='SN9'")['status'], 'In stock')
+        self.post(f"/products/{p['id']}/serials", {'serials': 'SN10'}, once=False)  # no unnumbered stock left
+        self.assertIsNone(self.one("SELECT * FROM serials WHERE serial='SN10'"))
+
+    def test_flexible_selling_price(self):  # U-AC-022, U-AC-023
+        p = self.stocked_product()  # price 150, cost 100 / 120
+        self.login('cashier', 'cashier123')
+        self.post('/sales/pos', {'items': f'[{{"id": {p["id"]}, "qty": 2, "price": 14000}}]', 'tendered': '280',
+                                 'method': 'Cash'})
+        self.assertIsNone(self.one('SELECT * FROM sales'))  # no permission to change prices
+        con = self.db()
+        con.execute("INSERT INTO role_permissions VALUES ('Sales Attendant', 'price_change')")
+        con.close()
+        self.post('/sales/pos', {'items': f'[{{"id": {p["id"]}, "qty": 2, "price": 14000}}]', 'tendered': '280',
+                                 'method': 'Cash'})
+        self.post('/sales/pos', {'items': f'[{{"id": {p["id"]}, "qty": 1, "price": 16000}}, {{"id": {p["id"]}, "qty": 1}}]',
+                                 'tendered': '310', 'method': 'Cash'})
+        cashier = self.one("SELECT id FROM users WHERE username='cashier'")['id']
+        rows = self.db().execute('SELECT * FROM sale_items ORDER BY id').fetchall()
+        self.assertEqual([(r['default_price'], r['price'], r['price_by']) for r in rows],
+                         [(15000, 14000, cashier), (15000, 16000, cashier), (15000, 15000, None)])
+        self.assertEqual(self.one('SELECT total FROM sales WHERE id=1')['total'], 28000)
+        self.login('admin', 'admin123')
+        r = self.c.get('/reports/?r=price_variation&start=2000-01-01&end=2100-01-01').data.decode()
+        self.assertIn('Below', r)
+        self.assertIn('Above', r)
+        self.assertIn('−20.00', r)  # 2 x -10
+        self.assertIn('vneg', r)
+        r = self.c.get('/reports/?r=price_variation_product&start=2000-01-01&end=2100-01-01').data.decode()
+        self.assertIn('−10.00', r)  # -20 + 10 in total
+        self.assertIn('vneg', r)
+        self.assertIn(b'changed by cashier', self.c.get('/sales/1').data)
+
+    def test_manual_sales(self):  # U-AC-024, U-AC-025
+        p = self.stocked_product()
+        self.login('cashier', 'cashier123')
+        self.assertEqual(self.c.get('/sales/manual').status_code, 403)
+        self.login('admin', 'admin123')
+        cashier = self.one("SELECT id FROM users WHERE username='cashier'")['id']
+        admin = self.one("SELECT id FROM users WHERE username='admin'")['id']
+        base = {'date': '2026-11-20', 'seller_id': cashier, 'pid': [p['id']], 'qty': ['3'], 'price': ['150'],
+                'serials': [''], 'method': 'Cash', 'tendered': '450', 'reference': ''}
+        self.post('/sales/manual', dict(base, stock='deduct'))
+        s = self.one('SELECT * FROM sales')
+        self.assertTrue('-M-' in s['receipt_no'])
+        self.assertEqual((s['manual'], s['user_id'], s['entered_by'], s['date'], s['no_stock']),
+                         (1, cashier, admin, '2026-11-20', 0))
+        self.assertEqual(self.stock(p['id'])['stock'], 17)
+        self.assertEqual(self.one('SELECT cost FROM sale_items')['cost'], 10000)  # FIFO
+        self.post('/sales/manual', dict(base, stock='already', reference='TT55'))
+        self.assertEqual(self.stock(p['id'])['stock'], 17)  # not deducted twice
+        self.post('/sales/manual', dict(base, date='2099-01-01', stock='deduct'))  # future date refused
+        self.assertEqual(self.one('SELECT COUNT(*) n FROM sales')['n'], 2)
+        self.sell([(p['id'], 1)], tendered='150')
+        r = self.c.get('/reports/?r=sales_source&start=2000-01-01&end=2100-01-01').data.decode()
+        self.assertIn('Manual sales (recorded later)', r)
+        self.assertIn('POS sales', r)
+        r = self.c.get('/sales/?source=manual&start=2000-01-01&end=2100-01-01').data.decode()
+        self.assertEqual(r.count('badge manual'), 2)
+        self.assertIn('TT55', self.c.get('/sales/?q=TT55&start=2000-01-01&end=2100-01-01').data.decode())  # AC-026
+        r = self.c.get('/reports/?r=manual_sales&start=2000-01-01&end=2100-01-01').data.decode()
+        self.assertIn('Already deducted', r)
+        self.assertIn('Cashier', r)
+        self.assertIn('Administrator', r)
+
+    def test_daily_report(self):  # U-AC-028
+        p = self.stocked_product()
+        self.sell([(p['id'], 2)], tendered='300')
+        self.sell([(p['id'], 1)], tendered='150')
+        con = self.db()
+        con.execute("UPDATE sales SET method='Mobile banking' WHERE id=2")
+        con.close()
+        self.post('/inventory/adjust', {'product_id': p['id'], 'kind': 'damaged', 'qty': '1', 'reason': 'broken'},
+                  once=False)
+        t = self._today()
+        r = self.c.get(f'/reports/daily?start={t}').data.decode()
+        for text in ('1. Sales', 'Cash sales', 'Bank and mobile banking sales', 'Fully paid sales',
+                     'Manually recorded sales', 'Sales by seller', 'Selling price variations', '2. Purchases',
+                     'Products purchased', '3. Inventory', 'Damaged, expired and lost', '4. Expenses and financial summary',
+                     'Cost of goods sold', 'Estimated net operating profit', 'Outstanding supplier balances'):
+            self.assertIn(text, r)
+        self.assertIn('450.00', r)  # total sales
+        self.assertIn('href="/sales/1"', r)  # transaction details
+        r = self.c.get(f'/reports/daily?start={t}&method=Cash').data.decode()
+        self.assertNotIn('href="/sales/2"', r)
+        r = self.c.get(f'/reports/daily?start={t}&format=xlsx')
+        sheet = zipfile.ZipFile(io.BytesIO(r.data)).read('xl/worksheets/sheet1.xml').decode()
+        self.assertIn('Sales - Summary', sheet)
+        self.assertIn('Inventory - Stock movement by product', sheet)
+
+    def test_number_formatting_and_colours(self):  # U-AC-030, U-AC-031
+        from markupsafe import Markup
+        self.assertEqual(core.fmt_money(123456789), '1,234,567.89')
+        self.assertEqual(core.fmt_qty(12345.5), '12,345.5')
+        self.assertEqual(core.fmt_signed(100000), Markup('<span class="vpos" title="positive">+1,000.00</span>'))
+        self.assertEqual(core.fmt_signed(-250), Markup('<span class="vneg" title="negative">−2.50</span>'))
+        self.assertIn('vzero', core.fmt_signed(0))
+        self.assertEqual(core.parse_money('1,234.50'), 123450)  # typed with separators: stored as a number
+        p = self.stocked_product()
+        self.sell([(p['id'], 1)], tendered='150')
+        r = self.c.get('/reports/?r=profit&start=2000-01-01&end=2100-01-01').data.decode()
+        self.assertIn('vpos', r)
+        self.assertIn('vneg', r)
+        self.assertIn('vpos', self.c.get('/').data.decode())
+
+    def test_product_detail_history(self):  # U-AC-027
+        p = self.stocked_product()
+        self.sell([(p['id'], 2)], tendered='300', reference='TT-9')
+        r = self.c.get(f"/products/{p['id']}").data.decode()
+        self.assertIn('-S-000001', r)
+        self.assertIn('TT-9', r)
+        self.assertIn('#1', r)  # batch used
+        r = self.c.get(f"/products/{p['id']}?tab=purchases").data.decode()
+        self.assertIn('-P-000001', r)
+        self.assertIn('ABC Wholesale', r)
+        self.assertEqual(self.c.get(f"/products/{p['id']}?tab=moves&all=1").status_code, 200)
 
     @staticmethod
     def _today():

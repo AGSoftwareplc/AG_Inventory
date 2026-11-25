@@ -24,7 +24,7 @@ This table shows how each acceptance criterion is met and how it is checked. The
 
 ### Requirements update v1.1 (`docs/SRS_v1.1_update.md`)
 
-Sections 3 (FIFO batches) and 7 (due and partial payments) are built. The other criteria of the update are pending.
+All sections of the update are built. U-AC-016 and U-AC-017 are the update's AC-016 and AC-017 (the original list already uses those numbers).
 
 | ID | Criterion | How it is checked |
 |---|---|---|
@@ -32,6 +32,18 @@ Sections 3 (FIFO batches) and 7 (due and partial payments) are built. The other 
 | AC-020 | Batch purchase costs are reflected in the cost of goods sold | `test_fifo_sale_takes_oldest_batches_and_costs_them`, `test_return_cancel_and_profit`, `test_purchase_return_comes_out_of_its_own_batch`, `test_adjust_a_chosen_batch` |
 | AC-026 | TT Numbers are recorded and can be found again | `test_unpaid_and_partial_sales_with_payment_history`, `test_credit_sales_need_permission`, `test_supplier_partial_payments_with_reference` |
 | AC-029 | Fully paid, partly paid and unpaid sales are handled | `test_unpaid_and_partial_sales_with_payment_history`, `test_credit_sales_need_permission` |
+| U-AC-016 | Products and categories import from Excel with validation | `test_excel_import_products_and_categories` |
+| U-AC-017 | Confirming a purchase updates inventory (no receiving step) | `test_purchase_receiving_and_weighted_average`, `test_cancelled_purchase_cannot_receive` |
+| AC-018 | Purchase returns are separate transactions after confirmation | `test_purchase_return_is_its_own_transaction`, `test_purchase_return_comes_out_of_its_own_batch` |
+| AC-021 | Serial-numbered products need valid serial numbers to sell | `test_serial_numbers` |
+| AC-022 | Authorized users can change selling prices during a sale | `test_flexible_selling_price` |
+| AC-023 | Price differences are recorded and reported | `test_flexible_selling_price` |
+| AC-024 | Manual sales are recorded with the actual seller | `test_manual_sales` |
+| AC-025 | Manual and POS sales are distinguishable in reports | `test_manual_sales`, `test_daily_report` |
+| AC-027 | The product page shows individual sales and purchase histories | `test_product_detail_history` |
+| AC-028 | The daily report summarizes sales, purchases, returns, expenses and payments | `test_daily_report` |
+| AC-030 | Amounts show comma thousand separators | `test_number_formatting_and_colours` |
+| AC-031 | Positive and negative values are visually distinct (colour and sign) | `test_number_formatting_and_colours`, `test_flexible_selling_price` |
 | (upgrade) | Existing stock becomes opening batches, after a backup | `test_existing_stock_becomes_opening_batches_with_backup` |
 
 ## Requirements coverage

@@ -289,3 +289,45 @@ CREATE INDEX IF NOT EXISTS ix_bmoves_move ON batch_moves(move_id);
 CREATE INDEX IF NOT EXISTS ix_bmoves_batch ON batch_moves(batch_id);
 
 CREATE TABLE IF NOT EXISTS used_tokens (token TEXT PRIMARY KEY);
+
+-- Serial numbers: one row per serial-numbered item (products with serial_tracked = 1).
+CREATE TABLE IF NOT EXISTS serials (
+  id INTEGER PRIMARY KEY,
+  product_id INTEGER NOT NULL REFERENCES products(id),
+  serial TEXT NOT NULL UNIQUE COLLATE NOCASE,   -- unique in the whole business
+  branch_id INTEGER NOT NULL DEFAULT 1,
+  status TEXT NOT NULL DEFAULT 'In stock',      -- In stock, Sold, Returned to supplier, In transit, Damaged, Expired, Lost, Removed
+  batch_id INTEGER REFERENCES stock_batches(id),
+  purchase_id INTEGER REFERENCES purchases(id),
+  purchase_item_id INTEGER REFERENCES purchase_items(id),
+  sale_id INTEGER REFERENCES sales(id),
+  sale_item_id INTEGER REFERENCES sale_items(id),
+  transfer_id INTEGER,
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+CREATE INDEX IF NOT EXISTS ix_serials_product ON serials(product_id, branch_id, status);
+CREATE TABLE IF NOT EXISTS serial_events (   -- the life of each serial-numbered item
+  id INTEGER PRIMARY KEY,
+  serial_id INTEGER NOT NULL REFERENCES serials(id),
+  event TEXT NOT NULL,                   -- Purchased, Registered, Sold, Customer return, Sale cancelled, ...
+  ref_type TEXT NOT NULL DEFAULT '',
+  ref_id INTEGER,
+  ref_no TEXT NOT NULL DEFAULT '',
+  branch_id INTEGER,
+  user_id INTEGER REFERENCES users(id),
+  at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+CREATE INDEX IF NOT EXISTS ix_serial_events ON serial_events(serial_id);
+
+-- A return to the supplier is its own transaction (one or more lines), always tied to the original purchase.
+CREATE TABLE IF NOT EXISTS purchase_returns (
+  id INTEGER PRIMARY KEY,
+  ref_no TEXT NOT NULL UNIQUE,           -- e.g. MAIN-PR-000003
+  purchase_id INTEGER NOT NULL REFERENCES purchases(id),
+  date TEXT NOT NULL,
+  amount INTEGER NOT NULL DEFAULT 0,     -- credit from the supplier, cents
+  notes TEXT NOT NULL DEFAULT '',
+  user_id INTEGER REFERENCES users(id),
+  branch_id INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);

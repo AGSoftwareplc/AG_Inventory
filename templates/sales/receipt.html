@@ -8,12 +8,12 @@
 <div class="receipt">
   {% include '_bizhead.html' %}
   <div class="grid" style="margin-bottom:1rem">
-    <div><b>Receipt:</b> {{ s.receipt_no }}</div><div><b>Date:</b> {{ s.created_at }}</div>
+    <div><b>Receipt:</b> {{ s.receipt_no }}</div><div><b>Date:</b> {{ s.date ~ ' (manual sale)' if s.manual else s.created_at }}</div>
     <div><b>Cashier:</b> {{ s.cashier }}</div><div><b>Customer:</b> {{ s.customer or 'Walk-in' }}</div>
   </div>
   {% if s.status == 'Cancelled' %}<div class="flash error">CANCELLED: {{ s.cancel_reason }}</div>{% endif %}
   <table><tr><th>Item</th><th class="n">Qty</th><th class="n">Price</th><th class="n">Total</th></tr>
-  {% for i in items %}<tr><td>{{ i.name }}</td><td class="n">{{ i.qty|qty }} {{ i.unit }}</td><td class="n">{{ i.price|money }}</td><td class="n">{{ (i.qty*i.price)|money }}</td></tr>{% endfor %}
+  {% for i in items %}<tr><td>{{ i.name }}{% if i.serials %}<br><small>S/N: {{ i.serials }}</small>{% endif %}</td><td class="n">{{ i.qty|qty }} {{ i.unit }}</td><td class="n">{{ i.price|money }}</td><td class="n">{{ (i.qty*i.price)|money }}</td></tr>{% endfor %}
   <tr><td colspan="3" class="n">Subtotal</td><td class="n">{{ s.subtotal|money }}</td></tr>
   {% if s.discount %}<tr><td colspan="3" class="n">Discount</td><td class="n">−{{ s.discount|money }}</td></tr>{% endif %}
   <tr class="total"><td colspan="3" class="n">TOTAL ({{ currency }})</td><td class="n">{{ s.total|money }}</td></tr>

@@ -158,7 +158,7 @@ def create_app(database=None, testing=False):
             except Exception as e:  # never block the shop because of a backup problem
                 app.logger.warning('Daily backup failed: %s', e)
 
-    app.jinja_env.filters.update(money=fmt_money, qty=fmt_qty, money_input=money_input)
+    app.jinja_env.filters.update(money=fmt_money, qty=fmt_qty, money_input=money_input, signed=core.fmt_signed)
     app.jinja_env.globals.update(csrf=csrf_field, once=once_field, can=can, setting=setting)
 
     @app.context_processor

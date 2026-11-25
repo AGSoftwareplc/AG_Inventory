@@ -1,7 +1,7 @@
 {% extends 'base.html' %}{% block title %}Purchase {{ pur.ref_no }}{% endblock %}
 {% block content %}
 {% set st = pur.status %}
-<div class="head"><h1>Purchase {{ pur.ref_no }} <span class="badge {{ 'ok' if st == 'Received' else ('err' if st == 'Cancelled' else 'warn') }}">{{ st }}</span></h1>
+<div class="head"><h1>Purchase {{ pur.ref_no }} <span class="badge {{ 'ok' if st == 'Received' else ('err' if st == 'Cancelled' else 'warn') }}">{{ 'Confirmed · in stock' if st == 'Received' else st }}</span></h1>
 <div class="noprint"><button class="light" onclick="window.print()">Print</button> <a class="btn light" href="{{ url_for('purchases.index') }}">All purchases</a></div></div>
 <div class="card"><div class="grid">
   <div><label>Supplier</label><a href="{{ url_for('contacts.supplier', rid=pur.supplier_id) }}">{{ pur.supplier }}</a> {{ pur.phone }}</div>
@@ -14,12 +14,17 @@
 <form method="post" action="{{ url_for('purchases.receive', pur_id=pur.id) }}">{{ csrf() }}{{ once() }}
 <div class="card tablewrap" style="padding:0"><table>
 <tr><th>Product</th><th class="n">Ordered</th><th class="n">Unit cost</th><th class="n">Net unit cost</th><th class="n">Line total</th><th class="n">Received</th><th class="n">Returned</th>
-{% if st in ('Confirmed','Partially Received') and can('receive') %}<th class="n">Receive now</th><th>Expiry date <span class="muted">(optional)</span></th>{% endif %}</tr>
+{% if st == 'Draft' %}<th>Expiry</th>{% endif %}
+{% if st in ('Confirmed','Partially Received') and can('receive') %}<th class="n">Receive now</th><th>Expiry date <span class="muted">(optional)</span></th><th>Serial numbers</th>{% endif %}</tr>
 {% for i in items %}{% set left = i.qty - i.received_qty %}
 <tr><td>{{ i.name }} <span class="muted">{{ i.code }}</span></td><td class="n">{{ i.qty|qty }} {{ i.unit }}</td><td class="n">{{ i.unit_cost|money }}</td>
 <td class="n">{{ i.net_cost|money }}</td><td class="n">{{ (i.qty*i.unit_cost)|money }}</td><td class="n">{{ i.received_qty|qty }}</td><td class="n">{{ i.returned_qty|qty }}</td>
+{% if st == 'Draft' %}<td>{{ i.expiry or '' }}</td>{% endif %}
 {% if st in ('Confirmed','Partially Received') and can('receive') %}<td class="n">{% if left > 0.0005 %}<input name="r_{{ i.id }}" inputmode="decimal" value="{{ left|qty }}" style="width:100px;text-align:right">{% else %}✓{% endif %}</td>
-<td>{% if left > 0.0005 %}<input type="date" name="x_{{ i.id }}" style="width:150px">{% endif %}</td>{% endif %}</tr>
+<td>{% if left > 0.0005 %}<input type="date" name="x_{{ i.id }}" style="width:150px">{% endif %}</td>
+<td>{% if left > 0.0005 %}<textarea name="s_{{ i.id }}" rows="1" class="serials" placeholder="only for serial-numbered products">{{ i.serials }}</textarea>{% endif %}</td>{% endif %}</tr>
+{% if serials.get(i.id) %}<tr><td colspan="9" class="muted serials">Serial numbers: {% for r in serials[i.id] %}{{ r.serial }}{% if r.status != 'In stock' %} ({{ r.status|lower }}){% endif %}{{ ', ' if not loop.last }}{% endfor %}</td></tr>
+{% elif st == 'Draft' and i.serials %}<tr><td colspan="9" class="muted serials">Serial numbers: {{ i.serials|replace('\n', ', ') }}</td></tr>{% endif %}
 {% endfor %}
 <tr><td colspan="4" class="n">Subtotal</td><td class="n">{{ gross|money }}</td><td colspan="3"></td></tr>
 {% if pur.discount %}<tr><td colspan="4" class="n">Discount</td><td class="n">−{{ pur.discount|money }}</td><td colspan="3"></td></tr>{% endif %}
@@ -27,16 +32,17 @@
 {% if pur.returned_value %}<tr><td colspan="4" class="n">Returned to supplier</td><td class="n">−{{ pur.returned_value|money }}</td><td colspan="3"></td></tr>{% endif %}
 <tr><td colspan="4" class="n">Paid</td><td class="n">{{ pur.paid|money }}</td><td colspan="3"></td></tr>
 </table></div>
-{% if st in ('Confirmed','Partially Received') and can('receive') %}<div class="actions noprint"><button>Receive into stock</button> <span class="muted">Change the quantities for a partial delivery.</span></div>{% endif %}
+{% if st in ('Confirmed','Partially Received') and can('receive') %}<div class="actions noprint"><button>Receive into stock</button> <span class="muted">This purchase was confirmed before receiving became automatic. Change the quantities for a partial delivery.</span></div>{% endif %}
 </form>
 
 <div class="row noprint">
 {% if st == 'Draft' and can('purchases') %}
 <div class="card"><h2 style="margin-top:0">Draft</h2><div class="actions">
   <a class="btn light" href="{{ url_for('purchases.edit', pur_id=pur.id) }}">Edit</a>
-  <form method="post" class="inline" action="{{ url_for('purchases.confirm', pur_id=pur.id) }}">{{ csrf() }}{{ once() }}<button>Confirm order</button></form></div></div>
+  <form method="post" class="inline" action="{{ url_for('purchases.confirm', pur_id=pur.id) }}" onsubmit="return confirm('Confirm this purchase? All quantities go into stock now.')">{{ csrf() }}{{ once() }}<button>Confirm purchase (adds to stock)</button></form></div>
+  <p class="muted">Confirming ends the purchase: everything on it goes into stock at once, there is no separate receiving step.</p></div>
 {% endif %}
-{% if st in ('Draft','Confirmed') and can('purchases') and not pur.paid %}
+{% if (st == 'Draft' or (st == 'Confirmed' and not items|sum(attribute='received_qty'))) and can('purchases') and not pur.paid %}
 <form method="post" class="card" action="{{ url_for('purchases.cancel', pur_id=pur.id) }}">{{ csrf() }}{{ once() }}<h2 style="margin-top:0">Cancel purchase</h2>
 <label>Reason *</label><input name="reason" required><div class="actions"><button class="danger">Cancel purchase</button></div></form>
 {% endif %}
@@ -49,9 +55,15 @@
 <div class="actions"><button>Save payment</button></div></form>
 {% endif %}
 {% if st in ('Partially Received','Received') and can('receive') %}
-<form method="post" class="card" action="{{ url_for('purchases.ret', pur_id=pur.id) }}">{{ csrf() }}{{ once() }}<h2 style="margin-top:0">Return to supplier</h2>
-<div class="grid"><div class="wide"><label>Line</label><select name="item_id">{% for i in items if i.received_qty - i.returned_qty > 0.0005 %}<option value="{{ i.id }}">{{ i.name }} (up to {{ (i.received_qty - i.returned_qty)|qty }})</option>{% endfor %}</select></div>
-<div><label>Quantity</label><input name="qty" inputmode="decimal" required></div><div><label>Reason *</label><input name="reason" required></div></div>
+<form method="post" class="card wide" action="{{ url_for('purchases.ret', pur_id=pur.id) }}">{{ csrf() }}{{ once() }}<h2 style="margin-top:0">Return to supplier</h2>
+<p class="muted">A return is its own transaction (number PR-…) linked to this purchase. Enter the quantity to send back on each line; at most what was received, not yet returned and still in stock from this purchase.</p>
+<div class="tablewrap"><table><tr><th>Product</th><th class="n">Can return</th><th class="n">Return qty</th><th>Reason *</th><th>Serial numbers</th></tr>
+{% for i in items if i.received_qty - i.returned_qty > 0.0005 %}<tr><td>{{ i.name }}</td><td class="n">{{ (i.received_qty - i.returned_qty)|qty }} {{ i.unit }}</td>
+<td class="n"><input name="q_{{ i.id }}" inputmode="decimal" style="width:90px;text-align:right"></td>
+<td><input name="why_{{ i.id }}" placeholder="e.g. damaged, wrong item"></td>
+<td>{% if serials.get(i.id) %}<textarea name="sn_{{ i.id }}" rows="1" class="serials" placeholder="serial no. of each item"></textarea>{% endif %}</td></tr>
+{% else %}<tr><td colspan="5" class="muted">Everything received has already been returned.</td></tr>{% endfor %}</table></div>
+<div class="grid"><div><label>Date</label><input type="date" name="date" value="{{ today }}"></div><div class="wide"><label>Notes</label><input name="notes"></div></div>
 <div class="actions"><button class="light">Record return</button></div></form>
 {% endif %}
 </div>
@@ -60,6 +72,6 @@
 {% for p in pays %}<tr><td>{{ p.date }}</td><td>{{ p.method }}</td><td>{{ p.reference }}</td><td class="n">{{ p.amount|money }}</td><td>{{ p.username }}</td></tr>{% endfor %}</table></div>{% endif %}
 {% if batches %}<h2>Stock batches from this purchase</h2><div class="card tablewrap" style="padding:0"><table><tr><th>Batch</th><th>Product</th><th>Received</th><th>Expiry</th><th class="n">Qty in</th><th class="n">Still in stock</th><th class="n">Unit cost</th></tr>
 {% for b in batches %}<tr><td><a href="{{ url_for('inventory.batch', bid=b.id) }}">#{{ b.id }}</a></td><td>{{ b.name }}</td><td>{{ b.received }}</td><td>{{ b.expiry or '' }}</td><td class="n">{{ b.qty|qty }} {{ b.unit }}</td><td class="n">{{ b.remaining|qty }}</td><td class="n">{{ b.unit_cost|money }}</td></tr>{% endfor %}</table></div>{% endif %}
-{% if rets %}<h2>Supplier returns</h2><div class="card tablewrap" style="padding:0"><table><tr><th>Date</th><th>Product</th><th class="n">Qty</th><th class="n">Credit</th><th>Reason</th><th>By</th></tr>
-{% for r in rets %}<tr><td>{{ r.date }}</td><td>{{ r.name }}</td><td class="n">{{ r.qty|qty }}</td><td class="n">{{ r.amount|money }}</td><td>{{ r.reason }}</td><td>{{ r.username }}</td></tr>{% endfor %}</table></div>{% endif %}
+{% if rets %}<h2>Supplier returns</h2><div class="card tablewrap" style="padding:0"><table><tr><th>Return no.</th><th>Date</th><th>Product</th><th class="n">Qty</th><th class="n">Credit</th><th>Reason</th><th>By</th></tr>
+{% for r in rets %}<tr><td>{{ r.doc_no or '' }}</td><td>{{ r.date }}</td><td>{{ r.name }}</td><td class="n">{{ r.qty|qty }}</td><td class="n">{{ r.amount|money }}</td><td>{{ r.reason }}</td><td>{{ r.username }}</td></tr>{% endfor %}</table></div>{% endif %}
 {% endblock %}

@@ -199,6 +199,8 @@ def donut(rows):
 # ---------------------------------------------------------------- report definitions
 # Each report returns (columns, rows). Column = (label, key, kind) with kind text|money|qty|num.
 M, Q, T, N = 'money', 'qty', 'text', 'num'
+S = 'signed'          # money shown with + / − and green / red (profit, price differences)
+MONEY = (M, S)
 
 
 def _stock(db, f, low=False):
@@ -287,7 +289,7 @@ def _sales_group(db, s, e, f, key, label):
     rows = [dict(r, profit=(r['revenue'] or 0) - (r['cost'] or 0))
             for r in db.execute(sql + ' GROUP BY grp ORDER BY revenue DESC', args)]
     return [(label, 'grp', T), ('Qty sold (net)', 'qty', Q), ('Net revenue', 'revenue', M),
-            ('Cost of goods', 'cost', M), ('Gross profit', 'profit', M)], rows
+            ('Cost of goods', 'cost', M), ('Gross profit', 'profit', S)], rows
 
 
 def r_sales_product(db, s, e, f):
@@ -438,7 +440,7 @@ def r_batches(db, s, e, f):
         args.append(f['product'])
     rows = db.execute(sql + " ORDER BY p.name, CASE WHEN b.expiry IS NULL OR b.expiry='' THEN 1 ELSE 0 END, b.expiry, "
                       "b.received, b.id", args).fetchall()
-    return [('Code', 'code', T), ('Product', 'name', T), ('Batch', 'batch', N), ('From', 'ref_no', T),
+    return [('Code', 'code', T), ('Product', 'name', T), ('Batch', 'batch', T), ('From', 'ref_no', T),
             ('Received', 'received', T), ('Expiry', 'expiry', T), ('Qty in', 'qty', Q), ('In stock', 'remaining', Q),
             ('Unit cost', 'unit_cost', M), ('Value', 'value', M)], rows
 
@@ -456,7 +458,7 @@ def r_batch_cogs(db, s, e, f):
         args.append(f['product'])
     rows = db.execute(sql + ' ORDER BY bm.id', args).fetchall()
     return [('Date', 'day', T), ('Receipt', 'ref_no', T), ('Code', 'code', T), ('Product', 'name', T),
-            ('Batch', 'batch', N), ('Batch from', 'bref', T), ('Received', 'received', T), ('Qty (net of returns)', 'qty', Q),
+            ('Batch', 'batch', T), ('Batch from', 'bref', T), ('Received', 'received', T), ('Qty (net of returns)', 'qty', Q),
             ('Unit cost', 'unit_cost', M), ('Cost of goods', 'cost', M)], rows
 
 
@@ -472,7 +474,7 @@ def r_profit(db, s, e, f):
     wo = db.execute("SELECT COALESCE(SUM(-qty*unit_cost),0) FROM stock_moves WHERE move_type IN "
                     "('damaged','expired','lost') AND date(at) BETWEEN ? AND ?", (s, e)).fetchone()[0]
     rows.append({'item': 'Note: stock written off (damaged/expired/lost, not included above)', 'amount': wo})
-    return [('Item', 'item', T), ('Amount', 'amount', M)], rows
+    return [('Item', 'item', T), ('Amount', 'amount', S)], rows
 
 
 def r_expenses(db, s, e, f):
@@ -503,7 +505,7 @@ def r_collections(db, s, e, f):
 
 def r_branch_sales(db, s, e, f):
     return [('Branch', 'branch', T), ('Sales', 'sales_count', N), ('Net sales', 'net_sales', M),
-            ('Gross profit', 'gross_profit', M), ('Expenses', 'expenses', M), ('Est. net profit', 'net_profit', M)], \
+            ('Gross profit', 'gross_profit', S), ('Expenses', 'expenses', M), ('Est. net profit', 'net_profit', S)], \
         by_branch(s, e)
 
 
@@ -526,9 +528,98 @@ def r_branch_stock(db, s, e, f):
             ('Stock', 'stock', Q), ('Avg cost', 'avg_cost', M), ('Stock value', 'value', M)], rows
 
 
+# ---------------------------------------------------------------- selling price variations (update section 5)
+PRICE_DIFF = 'i.price - COALESCE(i.default_price, i.price)'
+
+
+def r_price_variation(db, s, e, f):
+    """Every sale line sold at another price than the product's default price, and who changed it."""
+    sql = (f"SELECT sa.date, sa.receipt_no, sa.id AS sid, p.code, p.name, i.qty, i.default_price, i.price, "
+           f"{PRICE_DIFF} AS diff, ({PRICE_DIFF}) * i.qty AS total_diff, CASE WHEN {PRICE_DIFF} > 0 THEN 'Above' "
+           f"ELSE 'Below' END AS dir, u.username AS seller, pu.username AS changed_by, "
+           f"CASE sa.manual WHEN 1 THEN 'Manual' ELSE 'POS' END AS source FROM sale_items i JOIN sales sa ON "
+           f"sa.id=i.sale_id JOIN products p ON p.id=i.product_id LEFT JOIN users u ON u.id=sa.user_id LEFT JOIN users "
+           f"pu ON pu.id=i.price_by WHERE sa.status='Completed' AND {PRICE_DIFF} <> 0 AND sa.date BETWEEN ? AND ?")
+    args = [s, e]
+    if f['product']:
+        sql += ' AND p.id=?'
+        args.append(f['product'])
+    rows = [dict(r, _url=f"/sales/{r['sid']}") for r in db.execute(sql + ' ORDER BY sa.id', args)]
+    return [('Date', 'date', T), ('Receipt', 'receipt_no', T), ('Code', 'code', T), ('Product', 'name', T),
+            ('Qty', 'qty', Q), ('Default price', 'default_price', M), ('Price sold', 'price', M),
+            ('Difference each', 'diff', S), ('Total difference', 'total_diff', S), ('Above / below', 'dir', T),
+            ('Seller', 'seller', T), ('Price changed by', 'changed_by', T), ('Recorded', 'source', T)], rows
+
+
+def r_price_variation_product(db, s, e, f):
+    """Per product: sales at default prices against what was actually charged, and the effect on sales."""
+    sql = (f"SELECT p.code||' - '||p.name AS grp, SUM(i.qty) AS qty, SUM(CASE WHEN {PRICE_DIFF} > 0 THEN i.qty ELSE 0 END) "
+           f"AS above_q, SUM(CASE WHEN {PRICE_DIFF} < 0 THEN i.qty ELSE 0 END) AS below_q, "
+           f"SUM(i.qty * COALESCE(i.default_price, i.price)) AS at_default, SUM(i.qty * i.price) AS actual, "
+           f"SUM(({PRICE_DIFF}) * i.qty) AS diff FROM sale_items i JOIN sales sa ON sa.id=i.sale_id JOIN products p ON "
+           f"p.id=i.product_id WHERE sa.status='Completed' AND sa.date BETWEEN ? AND ?")
+    args = [s, e]
+    if f['product']:
+        sql += ' AND p.id=?'
+        args.append(f['product'])
+    rows = []
+    for r in db.execute(sql + f' GROUP BY p.id HAVING SUM(ABS({PRICE_DIFF})) > 0 ORDER BY diff', args):
+        pct = 100 * r['diff'] / r['at_default'] if r['at_default'] else 0
+        rows.append(dict(r, pct=f"{'+' if pct > 0 else ('−' if pct < 0 else '')}{abs(pct):.1f}%"))
+    return [('Product', 'grp', T), ('Qty sold', 'qty', Q), ('Qty above default', 'above_q', Q),
+            ('Qty below default', 'below_q', Q), ('Sales at default prices', 'at_default', M),
+            ('Actual sales', 'actual', M), ('Price variation', 'diff', S), ('Effect on sales', 'pct', T)], rows
+
+
+# ---------------------------------------------------------------- POS and manual sales (update section 6)
+def r_sales_source(db, s, e, f):
+    rows = db.execute("SELECT CASE manual WHEN 1 THEN 'Manual sales (recorded later)' ELSE 'POS sales' END AS grp, "
+                      "COUNT(*) AS n, SUM(total) AS total, SUM(refunded) AS refunded, SUM(total-refunded) AS net, "
+                      "SUM(paid) AS paid, SUM(total-refunded-paid) AS owed FROM sales WHERE status='Completed' AND "
+                      "date BETWEEN ? AND ? GROUP BY manual ORDER BY manual", (s, e)).fetchall()
+    return [('Recorded', 'grp', T), ('Sales', 'n', N), ('Total', 'total', M), ('Returns', 'refunded', M),
+            ('Net sales', 'net', M), ('Paid', 'paid', M), ('Owed', 'owed', M)], rows
+
+
+def r_manual_sales(db, s, e, f):
+    rows = [dict(r, _url=f"/sales/{r['id']}") for r in db.execute(
+        "SELECT s.id, s.date, s.receipt_no, u.full_name AS seller, en.full_name AS recorder, s.created_at, "
+        "CASE s.no_stock WHEN 1 THEN 'Already deducted' ELSE 'Deducted (FIFO)' END AS stock, s.total, s.paid, s.status, "
+        "s.notes FROM sales s LEFT JOIN users u ON u.id=s.user_id LEFT JOIN users en ON en.id=s.entered_by "
+        "WHERE s.manual=1 AND s.date BETWEEN ? AND ? ORDER BY s.date, s.id", (s, e))]
+    return [('Sale date', 'date', T), ('Receipt', 'receipt_no', T), ('Sold by', 'seller', T),
+            ('Recorded by', 'recorder', T), ('Recorded on', 'created_at', T), ('Stock', 'stock', T),
+            ('Total', 'total', M), ('Paid', 'paid', M), ('Status', 'status', T), ('Notes', 'notes', T)], rows
+
+
+def r_purchase_returns(db, s, e, f):
+    rows = [dict(r, _url=f"/purchases/{r['purchase_id']}") for r in db.execute(
+        "SELECT pr.date, pr.ref_no, pr.purchase_id, pu.ref_no AS purchase, sp.name AS supplier, p.name, r.qty, r.amount, "
+        "r.reason, u.username FROM returns r JOIN purchase_returns pr ON pr.id=r.return_id JOIN purchases pu ON "
+        "pu.id=pr.purchase_id JOIN suppliers sp ON sp.id=pu.supplier_id JOIN products p ON p.id=r.product_id "
+        "LEFT JOIN users u ON u.id=r.user_id WHERE pr.date BETWEEN ? AND ? ORDER BY pr.id, r.id", (s, e))]
+    return [('Date', 'date', T), ('Return no.', 'ref_no', T), ('Purchase', 'purchase', T), ('Supplier', 'supplier', T),
+            ('Product', 'name', T), ('Qty', 'qty', Q), ('Credit', 'amount', M), ('Reason', 'reason', T),
+            ('By', 'username', T)], rows
+
+
+def r_serials(db, s, e, f):
+    sql = ("SELECT p.code, p.name, sr.serial, sr.status, b.name AS branch, sa.receipt_no, sr.created_at FROM serials sr "
+           "JOIN products p ON p.id=sr.product_id LEFT JOIN branches b ON b.id=sr.branch_id LEFT JOIN sales sa ON "
+           "sa.id=sr.sale_id WHERE 1=1")
+    args = []
+    if f['product']:
+        sql += ' AND p.id=?'
+        args.append(f['product'])
+    rows = db.execute(sql + ' ORDER BY p.name, sr.serial', args).fetchall()
+    return [('Code', 'code', T), ('Product', 'name', T), ('Serial number', 'serial', T), ('Status', 'status', T),
+            ('Branch', 'branch', T), ('Sold on', 'receipt_no', T), ('Registered', 'created_at', T)], rows
+
+
 REPORTS = {
     'Inventory': [('stock', 'Current stock and valuation', r_stock), ('low', 'Low stock', r_low),
                   ('batches', 'Stock batches (FIFO) and expiry', r_batches),
+                  ('serials', 'Serial numbers and their status', r_serials),
                   ('moves', 'Stock movements', r_moves),
                   ('writeoffs', 'Damaged / expired / lost', r_writeoffs),
                   ('stocktake', 'Stocktaking differences', r_stocktake)],
@@ -540,13 +631,18 @@ REPORTS = {
               ('sales_payment', 'Sales by payment status (paid / partly / unpaid)', r_sales_payment),
               ('customer_payments', 'Customer payments (with TT No.)', r_customer_payments),
               ('customer_balances', 'Outstanding customer balances', r_customer_balances),
-              ('batch_cogs', 'Cost of goods sold by batch (FIFO)', r_batch_cogs)],
+              ('batch_cogs', 'Cost of goods sold by batch (FIFO)', r_batch_cogs),
+              ('price_variation', 'Sold above / below the default price', r_price_variation),
+              ('price_variation_product', 'Price variation by product', r_price_variation_product),
+              ('sales_source', 'POS sales and manual sales', r_sales_source),
+              ('manual_sales', 'Manual sales (seller and who recorded them)', r_manual_sales)],
     'Purchases': [('purch_history', 'Purchase history', r_purch_history),
                   ('purch_supplier', 'Purchases by supplier', r_purch_supplier),
                   ('purch_product', 'Purchases by product', r_purch_product),
                   ('outstanding', 'Outstanding supplier payments', r_outstanding),
                   ('supplier_balances', 'Outstanding supplier balances', r_supplier_balances),
-                  ('supplier_payments', 'Supplier payments (with TT No.)', r_supplier_payments)],
+                  ('supplier_payments', 'Supplier payments (with TT No.)', r_supplier_payments),
+                  ('purchase_returns', 'Returns to suppliers', r_purchase_returns)],
     'Financial': [('profit', 'Profit summary', r_profit), ('expenses', 'Expenses by category', r_expenses),
                   ('expense_list', 'Expense list', r_expense_list),
                   ('collections', 'Payment collection', r_collections)],
@@ -562,7 +658,7 @@ def totals(cols, rows):
     skip = {'balance', 'avg_cost', 'price', 'unit_cost', 'min_stock', 'system_qty', 'counted_qty', 'batch'}
     out = {}
     for _l, k, kind in cols:
-        if kind in (M, Q, N) and k not in skip:
+        if kind in (M, S, Q, N) and k not in skip:
             out[k] = sum((r[k] or 0) for r in rows)
     return out
 
@@ -594,6 +690,185 @@ def index():
                            show_branch_reports=g.user['role'] == ADMIN and len(g.branches) > 1, **lists)
 
 
+# ---------------------------------------------------------------- daily transaction report (update section 8)
+@bp.route('/daily')
+@requires('reports')
+def daily():
+    """Everything that happened on a day (or a few days): sales, purchases, stock, expenses and the money summary.
+    Seller, POS / manual and payment method filter the sales part. Excel and Print / PDF like the other reports."""
+    db = rdb()
+    t = date.today().isoformat()
+    start = request.args.get('start') or request.args.get('date') or t
+    end = request.args.get('end') or start
+    if end < start:
+        start, end = end, start
+    fl = {'seller': request.args.get('seller', type=int), 'type': request.args.get('type', ''),
+          'method': request.args.get('method', '')}
+    blocks = daily_blocks(db, start, end, fl)
+    title = 'Daily transaction report'
+    where = branch_label()
+    if request.args.get('format') == 'xlsx':
+        sub = f"{setting('shop_name')} | {where} | {start}{' to ' + end if end != start else ''} | amounts in {setting('currency')}"
+        data = xlsx_blocks(title, sub, [(f'{sec} - {h}' if h else sec, c, r, tt) for sec, h, c, r, tt in blocks],
+                           sheet_name='Daily report')
+        return Response(data, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        headers={'Content-Disposition': f'attachment; filename="daily-report-{start}-{end}.xlsx"'})
+    sellers = db.execute('SELECT id, full_name FROM users ORDER BY full_name').fetchall()
+    sections = []
+    for sec, h, c, r, tt in blocks:
+        if not sections or sections[-1][0] != sec:
+            sections.append((sec, []))
+        sections[-1][1].append((h, c, r, tt))
+    return render_template('daily.html', sections=sections, start=start, end=end, fl=fl, sellers=sellers,
+                           methods=core.payment_methods(), branch_opts=branch_choice(),
+                           where=where if len(g.branches) > 1 else '')
+
+
+def daily_blocks(db, s, e, fl):
+    """[(section, heading, cols, rows, totals)] for the daily report."""
+    out = []
+    # ---- 8.1 sales
+    w, a = " WHERE s.status='Completed' AND s.date BETWEEN ? AND ?", [s, e]
+    if fl['seller']:
+        w += ' AND s.user_id=?'
+        a.append(fl['seller'])
+    if fl['type'] in ('pos', 'manual'):
+        w += ' AND s.manual=?'
+        a.append(1 if fl['type'] == 'manual' else 0)
+    if fl['method']:
+        w += ' AND s.method=?'
+        a.append(fl['method'])
+    sales = [dict(r) for r in db.execute(
+        "SELECT s.*, u.full_name AS seller, c.name AS customer, (SELECT group_concat(reference, ', ') FROM sale_payments sp "
+        "WHERE sp.sale_id=s.id AND reference<>'') AS refs, (SELECT COALESCE(SUM((i.price-COALESCE(i.default_price, i.price))"
+        "*i.qty),0) FROM sale_items i WHERE i.sale_id=s.id) AS pvar FROM sales s LEFT JOIN users u ON u.id=s.user_id "
+        "LEFT JOIN customers c ON c.id=s.customer_id" + w + ' ORDER BY s.id', a)]
+    for r in sales:
+        r['net'] = r['total'] - r['refunded']
+        r['owed'] = max(0, r['net'] - r['paid'])
+        r['pay'] = rules.payment_status(r['net'], r['paid'])
+        r['source'] = 'Manual' if r['manual'] else 'POS'
+        r['_url'] = f"/sales/{r['id']}"
+
+    def line(item, rows, amount='net'):
+        return {'item': item, 'n': len(rows), 'amount': sum(r[amount] for r in rows)}
+    up = sum(r['pvar'] for r in sales if r['pvar'] > 0)
+    down = sum(r['pvar'] for r in sales if r['pvar'] < 0)
+    summary = [line('Total sales', sales), line('Cash sales', [r for r in sales if r['method'].lower() == 'cash']),
+               line('Bank and mobile banking sales', [r for r in sales if r['method'].lower() != 'cash'])]
+    for m in sorted({r['method'] for r in sales}):
+        summary.append(line(f'· paid by {m}', [r for r in sales if r['method'] == m]))
+    summary += [line('Fully paid sales', [r for r in sales if r['pay'] == 'Paid']),
+                line('Partially paid sales', [r for r in sales if r['pay'] == 'Partially paid']),
+                line('Unpaid sales', [r for r in sales if r['pay'] == 'Unpaid']),
+                line('Still owed on these sales', [r for r in sales if r['owed'] > 0], 'owed'),
+                line('POS sales', [r for r in sales if not r['manual']]),
+                line('Manually recorded sales', [r for r in sales if r['manual']])]
+    out.append(('Sales', 'Summary', [('Item', 'item', T), ('Count', 'n', N), ('Amount', 'amount', M)], summary, {}))
+    out.append(('Sales', 'Selling price variations',
+                [('Item', 'item', T), ('Amount', 'amount', S)],
+                [{'item': 'Sold above the default price', 'amount': up},
+                 {'item': 'Sold below the default price', 'amount': down},
+                 {'item': 'Total price variation', 'amount': up + down}], {}))
+    by = {}
+    for r in sales:
+        b = by.setdefault(r['seller'] or '?', {'grp': r['seller'] or '?', 'n': 0, 'pos': 0, 'manual': 0, 'net': 0,
+                                                'paid': 0, 'pvar': 0})
+        b['n'] += 1
+        b['manual' if r['manual'] else 'pos'] += 1
+        b['net'] += r['net']
+        b['paid'] += r['paid']
+        b['pvar'] += r['pvar']
+    seller_cols = [('Seller', 'grp', T), ('Sales', 'n', N), ('POS', 'pos', N), ('Manual', 'manual', N),
+                   ('Net sales', 'net', M), ('Paid', 'paid', M), ('Price variation', 'pvar', S)]
+    rows = sorted(by.values(), key=lambda x: -x['net'])
+    out.append(('Sales', 'Sales by seller', seller_cols, rows, totals(seller_cols, rows)))
+    sale_cols = [('Receipt', 'receipt_no', T), ('Recorded', 'source', T), ('Seller', 'seller', T),
+                 ('Customer', 'customer', T), ('Method', 'method', T), ('TT No. / ref.', 'refs', T),
+                 ('Net total', 'net', M), ('Paid', 'paid', M), ('Owed', 'owed', M), ('Payment', 'pay', T),
+                 ('Price variation', 'pvar', S)]
+    out.append(('Sales', 'Sales transactions', sale_cols, sales, totals(sale_cols, sales)))
+
+    # ---- 8.2 purchases
+    purch = [dict(r, _url=f"/purchases/{r['id']}", bal=r['total'] - r['returned_value'] - r['paid'])
+             for r in db.execute("SELECT p.*, sp.name AS supplier FROM purchases p JOIN suppliers sp ON sp.id=p.supplier_id "
+                                 "WHERE p.status NOT IN ('Draft','Cancelled') AND p.date BETWEEN ? AND ? ORDER BY p.id",
+                                 (s, e))]
+    pret = db.execute('SELECT COUNT(DISTINCT r.return_id) AS n, COUNT(*) AS lines, COALESCE(SUM(r.qty),0) AS q, '
+                      "COALESCE(SUM(r.amount),0) AS v FROM returns r WHERE r.kind='purchase' AND r.date BETWEEN ? AND ?",
+                      (s, e)).fetchone()
+    paid_sup = db.execute('SELECT COALESCE(SUM(amount),0) FROM purchase_payments WHERE date BETWEEN ? AND ?',
+                          (s, e)).fetchone()[0]
+    owe_sup = db.execute("SELECT COALESCE(SUM(total-returned_value-paid),0) FROM purchases WHERE status NOT IN "
+                         "('Draft','Cancelled') AND total-returned_value-paid>0").fetchone()[0]
+    out.append(('Purchases', 'Summary', [('Item', 'item', T), ('Count', 'n', N), ('Amount', 'amount', M)], [
+        {'item': 'Purchase transactions (confirmed)', 'n': len(purch), 'amount': sum(r['total'] for r in purch)},
+        {'item': 'Returns to suppliers', 'n': pret['lines'], 'amount': pret['v']},
+        {'item': 'Paid to suppliers', 'n': None, 'amount': paid_sup},
+        {'item': 'Outstanding supplier balances (all, now)', 'n': None, 'amount': owe_sup}], {}))
+    pp_cols = [('Product', 'grp', T), ('Qty', 'qty', Q), ('Value (after discount)', 'value', M)]
+    pp = db.execute("SELECT pr.code||' - '||pr.name AS grp, SUM(i.qty) AS qty, SUM(i.qty*i.unit_cost*1.0*"
+                    "CASE WHEN g.gross>0 THEN p.total*1.0/g.gross ELSE 1 END) AS value FROM purchase_items i JOIN purchases p "
+                    "ON p.id=i.purchase_id JOIN products pr ON pr.id=i.product_id JOIN (SELECT purchase_id, SUM(qty*unit_cost) "
+                    "AS gross FROM purchase_items GROUP BY purchase_id) g ON g.purchase_id=p.id WHERE p.status NOT IN "
+                    "('Draft','Cancelled') AND p.date BETWEEN ? AND ? GROUP BY pr.id ORDER BY value DESC", (s, e)).fetchall()
+    out.append(('Purchases', 'Products purchased', pp_cols, pp, totals(pp_cols, pp)))
+    pcols = [('Reference', 'ref_no', T), ('Supplier', 'supplier', T), ('Total', 'total', M),
+             ('Returned', 'returned_value', M), ('Paid', 'paid', M), ('Balance', 'bal', M)]
+    out.append(('Purchases', 'Purchase transactions', pcols, purch, totals(pcols, purch)))
+    rc, rr = r_purchase_returns(db, s, e, {})
+    if rr:
+        out.append(('Purchases', 'Returns to suppliers', rc, rr, totals(rc, rr)))
+
+    # ---- 8.3 inventory
+    def q(types, sign=1):
+        return f"SUM(CASE WHEN m.move_type IN ({','.join(repr(x) for x in types)}) THEN {sign}*m.qty ELSE 0 END)"
+    inv = [dict(r) for r in db.execute(
+        f"SELECT p.code||' - '||p.name AS grp, {q(('purchase', 'opening', 'transfer_in'))} AS received, "
+        f"{q(('sale',), -1)} AS sold, {q(('sale_return', 'sale_cancel'))} AS cust_ret, "
+        f"{q(('purchase_return',), -1)} AS sup_ret, {q(('damaged', 'expired', 'lost'), -1)} AS written_off, "
+        f"{q(('correction', 'stocktake', 'transfer_out', 'transfer_cancel'))} AS adjusted, p.stock FROM stock_moves m "
+        "JOIN products p ON p.id=m.product_id WHERE date(m.at) BETWEEN ? AND ? AND m.move_type<>'batch_open' "
+        'GROUP BY p.id ORDER BY p.name', (s, e))]
+    inv_cols = [('Product', 'grp', T), ('Received', 'received', Q), ('Sold', 'sold', Q),
+                ('Customer returns / cancels', 'cust_ret', Q), ('Returned to supplier', 'sup_ret', Q),
+                ('Damaged / expired / lost', 'written_off', Q), ('Other adjustments (+/−)', 'adjusted', Q),
+                ('Stock now', 'stock', Q)]
+    stock_now = db.execute('SELECT COALESCE(SUM(stock),0) AS q, COALESCE(SUM(stock*avg_cost),0) AS v FROM products '
+                           'WHERE active=1 AND stock>0').fetchone()
+    tot = totals(inv_cols, inv)
+    out.append(('Inventory', 'Summary', [('Item', 'item', T), ('Quantity', 'q', Q), ('Value', 'v', M)], [
+        {'item': 'Stock received', 'q': tot.get('received', 0), 'v': None},
+        {'item': 'Stock sold', 'q': tot.get('sold', 0), 'v': None},
+        {'item': 'Stock returned by customers / cancelled sales', 'q': tot.get('cust_ret', 0), 'v': None},
+        {'item': 'Stock returned to suppliers', 'q': tot.get('sup_ret', 0), 'v': None},
+        {'item': 'Damaged, expired and lost', 'q': tot.get('written_off', 0), 'v': db.execute(
+            "SELECT COALESCE(SUM(-qty*unit_cost),0) FROM stock_moves WHERE move_type IN ('damaged','expired','lost') "
+            'AND date(at) BETWEEN ? AND ?', (s, e)).fetchone()[0]},
+        {'item': 'Stock adjustments, stocktakes and transfers (+/−)', 'q': tot.get('adjusted', 0), 'v': None},
+        {'item': 'Remaining stock now (all products)', 'q': stock_now['q'], 'v': stock_now['v']}], {}))
+    out.append(('Inventory', 'Stock movement by product', inv_cols, inv, {k: v for k, v in tot.items() if k != 'stock'}))
+
+    # ---- 8.4 expenses and financial summary
+    p = rules.profit(db, s, e)
+    owe_cust = db.execute("SELECT COALESCE(SUM(total-refunded-paid),0) FROM sales WHERE status='Completed' AND "
+                          'total-refunded-paid>0').fetchone()[0]
+    got = db.execute("SELECT COALESCE(SUM(sp.amount),0) FROM sale_payments sp JOIN sales sa ON sa.id=sp.sale_id WHERE "
+                     "sa.status='Completed' AND sp.date BETWEEN ? AND ?", (s, e)).fetchone()[0]
+    out.append(('Expenses and financial summary', 'Summary', [('Item', 'item', T), ('Amount', 'amount', S)], [
+        {'item': 'Total sales revenue (after discounts and returns)', 'amount': p['net_sales']},
+        {'item': 'Cost of goods sold (FIFO batches)', 'amount': -p['cogs']},
+        {'item': 'Gross profit', 'amount': p['gross_profit']},
+        {'item': 'Total expenses', 'amount': -p['expenses']},
+        {'item': 'Estimated net operating profit', 'amount': p['net_profit']},
+        {'item': 'Money received from customers', 'amount': got},
+        {'item': 'Outstanding customer balances (all, now)', 'amount': owe_cust},
+        {'item': 'Outstanding supplier balances (all, now)', 'amount': -owe_sup}], {}))
+    ec, er = r_expense_list(db, s, e, {})
+    out.append(('Expenses and financial summary', 'Expenses', ec, er, totals(ec, er)))
+    return out
+
+
 # ---------------------------------------------------------------- minimal .xlsx writer
 def _col(i):
     s = ''
@@ -614,6 +889,11 @@ def _cell(ref, v, style=0):
 
 
 def xlsx_bytes(title, subtitle, cols, rows, tot):
+    return xlsx_blocks(title, subtitle, [(None, cols, rows, tot)])
+
+
+def xlsx_blocks(title, subtitle, blocks, sheet_name='Report'):
+    """One worksheet with a title and one or more tables: blocks = [(heading or None, cols, rows, totals)]."""
     lines = []
     r = 1
 
@@ -624,23 +904,36 @@ def xlsx_bytes(title, subtitle, cols, rows, tot):
         r += 1
 
     def conv(v, kind):
-        if kind == M:
+        if v is None:
+            return None
+        if kind in MONEY:
             return round((v or 0) / 100, 2)
         if kind == Q:
             return round(v or 0, 3)
         return v
 
-    row([title], lambda i: 1)
-    row([subtitle])
-    r += 1
-    row([c[0] for c in cols], lambda i: 1)
-    for rr in rows:
-        row([conv(rr[k], kind) for _l, k, kind in cols], lambda i: 2 if cols[i][2] == M else 0)
-    if tot:
-        row(['Total'] + [conv(tot[k], kind) if k in tot else '' for _l, k, kind in cols[1:]],
-            lambda i: 3 if cols[i][2] == M else 1)
-    widths = ''.join(f'<col min="{i + 1}" max="{i + 1}" width="{min(45, max(10, len(c[0]) + 4))}" customWidth="1"/>'
-                     for i, c in enumerate(cols))
+    if title:
+        row([title], lambda i: 1)
+    if subtitle:
+        row([subtitle])
+    if title or subtitle:
+        r += 1
+    widest = {}
+    for heading, cols, rows, tot in blocks:
+        if heading:
+            row([heading], lambda i: 1)
+        row([c[0] for c in cols], lambda i: 1)
+        for rr in rows:
+            row([conv(rr[k], kind) for _l, k, kind in cols], lambda i, cols=cols: 2 if cols[i][2] in MONEY else 0)
+        if tot:
+            row(['Total'] + [conv(tot[k], kind) if k in tot else '' for _l, k, kind in cols[1:]],
+                lambda i, cols=cols: 3 if cols[i][2] in MONEY else 1)
+        if len(blocks) > 1:
+            r += 1
+        for i, c in enumerate(cols):
+            widest[i] = max(widest.get(i, 0), len(c[0]))
+    widths = ''.join(f'<col min="{i + 1}" max="{i + 1}" width="{min(45, max(10, w + 4))}" customWidth="1"/>'
+                     for i, w in sorted(widest.items()))
     sheet = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
              '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
              f'<cols>{widths}</cols><sheetData>{"".join(lines)}</sheetData></worksheet>')
@@ -670,7 +963,7 @@ def xlsx_bytes(title, subtitle, cols, rows, tot):
         'xl/workbook.xml': '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
         'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
-        '<sheets><sheet name="Report" sheetId="1" r:id="rId1"/></sheets></workbook>',
+        f'<sheets><sheet name="{escape(sheet_name)}" sheetId="1" r:id="rId1"/></sheets></workbook>',
         'xl/_rels/workbook.xml.rels': '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
         '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'

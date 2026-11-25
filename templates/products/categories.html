@@ -1,6 +1,6 @@
 {% extends 'base.html' %}{% block title %}Categories{% endblock %}
 {% block content %}
-<div class="head"><h1>Product categories</h1><a class="btn light" href="{{ url_for('products.index') }}">Back to products</a></div>
+<div class="head"><h1>Product categories</h1><div><a class="btn light" href="{{ url_for('products.import_page', kind='categories') }}">⬆ Import from Excel</a> <a class="btn light" href="{{ url_for('products.index') }}">Back to products</a></div></div>
 <form method="post" class="card filters">{{ csrf() }}<div class="grow"><label>New category</label><input name="name" required></div><div style="flex:0"><button>Add</button></div></form>
 <div class="card tablewrap" style="padding:0"><table><tr><th>Name</th><th class="n">Products</th><th>Status / rename</th></tr>
 {% for c in rows %}<tr><td>{{ c.name }}</td><td class="n">{{ c.n }}</td>

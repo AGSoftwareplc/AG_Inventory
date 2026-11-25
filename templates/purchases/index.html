@@ -3,7 +3,7 @@
 <div class="head"><h1>Purchases</h1>{% if can('purchases') %}<a class="btn" href="{{ url_for('purchases.edit') }}">+ New purchase</a>{% endif %}</div>
 <form class="filters">{% include '_range.html' %}
   <div><label>Status</label><select name="status"><option value="">All</option>
-  {% for s in ['Draft','Confirmed','Partially Received','Received','Cancelled'] %}<option {{ 'selected' if status == s }}>{{ s }}</option>{% endfor %}
+  {% for v, l in [('Draft','Draft'),('Received','Confirmed (in stock)'),('Confirmed','Confirmed, not received (older)'),('Partially Received','Partially received (older)'),('Cancelled','Cancelled')] %}<option value="{{ v }}" {{ 'selected' if status == v }}>{{ l }}</option>{% endfor %}
   <option value="unpaid" {{ 'selected' if status == 'unpaid' }}>Not fully paid</option></select></div>
   <div><label>Supplier</label><select name="supplier"><option value="">All</option>{% for s in sups %}<option value="{{ s.id }}" {{ 'selected' if sup == s.id }}>{{ s.name }}</option>{% endfor %}</select></div>
   <div style="flex:0"><button>Show</button></div></form>
@@ -11,7 +11,7 @@
 <tr><th>Ref</th><th>Date</th><th>Supplier</th><th>Status</th><th class="n">Total</th><th class="n">Balance</th><th>Payment</th></tr>
 {% for p in rows %}{% set due = p.total - p.returned_value %}
 <tr><td><a href="{{ url_for('purchases.view', pur_id=p.id) }}">{{ p.ref_no }}</a></td><td>{{ p.date }}</td><td>{{ p.supplier }}</td>
-<td><span class="badge {{ 'ok' if p.status == 'Received' else ('err' if p.status == 'Cancelled' else 'warn') }}">{{ p.status }}</span></td>
+<td><span class="badge {{ 'ok' if p.status == 'Received' else ('err' if p.status == 'Cancelled' else 'warn') }}">{{ 'Confirmed · in stock' if p.status == 'Received' else p.status }}</span></td>
 <td class="n">{{ p.total|money }}</td><td class="n">{{ (due - p.paid)|money if p.status not in ('Draft','Cancelled') else '' }}</td>
 <td>{% if p.status not in ('Draft','Cancelled') %}{{ pay_status(due, p.paid) }}{% endif %}</td></tr>
 {% else %}<tr><td colspan="7" class="muted">No purchases in this period.</td></tr>{% endfor %}</table></div>

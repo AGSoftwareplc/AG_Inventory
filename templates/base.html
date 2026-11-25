@@ -19,7 +19,8 @@
     ('dash.index', 'Dashboard', true, ep.startswith('dash.'), '', '📊'),
   ]),
   ('Selling', 'selling', [
-    ('sales.index', 'Sales history', can('sales_view'), ep.startswith('sales.') and ep != 'sales.pos', '', '🧾'),
+    ('sales.index', 'Sales history', can('sales_view'), ep.startswith('sales.') and ep not in ('sales.pos', 'sales.manual'), '', '🧾'),
+    ('sales.manual', 'Manual sale', can('manual_sales'), ep == 'sales.manual', '', '✍️'),
     ('contacts.customers', 'Customers', can('customers') or can('sales_view'), 'customer' in ep, '', '👥'),
   ]),
   ('Buying', 'buying', [
@@ -37,7 +38,8 @@
   ]),
   ('Money & reports', 'money', [
     ('expenses.index', 'Expenses', can('expenses'), ep.startswith('expenses.'), '', '💸'),
-    ('reports.index', 'Reports', can('reports'), ep.startswith('reports.'), '', '📈'),
+    ('reports.daily', 'Daily report', can('reports'), ep == 'reports.daily', '', '📅'),
+    ('reports.index', 'Reports', can('reports'), ep == 'reports.index', '', '📈'),
   ]),
   ('Administration', 'admin', [
     ('admin.users', 'Users, settings & backup', g.user.role == 'Administrator', ep.startswith('admin.'), '', '⚙️'),

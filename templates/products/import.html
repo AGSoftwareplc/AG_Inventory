@@ -1,0 +1,45 @@
+{% extends 'base.html' %}{% block title %}Import {{ kind }}{% endblock %}
+{% block content %}
+<div class="head"><h1>Import from Excel</h1><a class="btn light" href="{{ url_for('products.index') }}">Back to products</a></div>
+<div class="tabs" style="display:flex;gap:.4rem;margin-bottom:.6rem">
+  <a class="btn {{ '' if kind == 'products' else 'light' }}" href="{{ url_for('products.import_page', kind='products') }}">Products</a>
+  <a class="btn {{ '' if kind == 'categories' else 'light' }}" href="{{ url_for('products.import_page', kind='categories') }}">Categories</a>
+</div>
+{% if stage == 'upload' %}
+<div class="card">
+<h2 style="margin-top:0">1. Download the template</h2>
+<p><a class="btn light" href="{{ url_for('products.import_template', kind=kind) }}">⬇ {{ kind|capitalize }} template (Excel)</a></p>
+<p class="muted">Columns: {% for f, h, _a in cols %}<b>{{ h }}</b>{{ ', ' if not loop.last }}{% endfor %}. Columns marked * are required.
+{% if kind == 'products' %} Prices and costs in {{ currency }} (no thousands separators needed). A category that does not exist yet is created. "Serial numbers" = yes for products where every item has its own serial number.{% endif %}
+You can also save the sheet as CSV.</p>
+<h2>2. Upload the filled-in file</h2>
+<form method="post" enctype="multipart/form-data">{{ csrf() }}<input type="hidden" name="kind" value="{{ kind }}">
+<input type="file" name="file" accept=".xlsx,.csv" required>
+<div class="actions"><button>Check the file</button> <span class="muted">Nothing is saved yet: you see the result of the check first.</span></div></form>
+</div>
+{% else %}
+<div class="tiles">
+  <div class="tile"><div class="k">{{ 'Imported' if stage == 'done' else 'Ready to import' }}</div><div class="v vpos">{{ (saved if stage == 'done' else counts.OK)|qty }}</div></div>
+  <div class="tile"><div class="k">Duplicates (skipped)</div><div class="v">{{ counts.Duplicate|qty }}</div></div>
+  <div class="tile {{ 'bad' if counts.Error }}"><div class="k">With errors (skipped)</div><div class="v {{ 'vneg' if counts.Error }}">{{ counts.Error|qty }}</div></div>
+</div>
+<div class="actions">
+{% if stage == 'check' and counts.OK %}
+<form method="post" class="inline">{{ csrf() }}{{ once() }}<input type="hidden" name="kind" value="{{ kind }}"><input type="hidden" name="action" value="save">
+<input type="hidden" name="rows" value="{{ checked|selectattr('status', 'equalto', 'OK')|list|tojson|forceescape }}">
+<button>Import the {{ counts.OK|qty }} correct row{{ 's' if counts.OK != 1 }}</button></form>{% endif %}
+{% if counts.Duplicate or counts.Error %}
+<form method="post" class="inline" action="{{ url_for('products.import_errors') }}">{{ csrf() }}<input type="hidden" name="kind" value="{{ kind }}">
+<input type="hidden" name="rows" value="{{ checked|rejectattr('status', 'equalto', 'OK')|list|tojson|forceescape }}">
+<button class="light">⬇ Rows to correct (Excel)</button></form>{% endif %}
+<a class="btn light" href="{{ url_for('products.import_page', kind=kind) }}">{{ 'Upload another file' if stage == 'done' else 'Upload again' }}</a>
+</div>
+<p class="muted">{% if stage == 'check' %}Check the list. Only the rows marked OK are imported. {% endif %}Rows with an error or a duplicate are skipped: download them, correct them in Excel and upload that file again.</p>
+<div class="card tablewrap" style="padding:0"><table>
+<tr><th>Row</th><th>Result</th>{% for f, h, _a in cols %}<th>{{ h }}</th>{% endfor %}<th>Message</th></tr>
+{% for r in checked %}<tr class="{{ 'low' if r.status == 'Error' }}"><td class="muted">{{ r.row }}</td>
+<td><span class="badge {{ 'ok' if r.status == 'OK' else ('warn' if r.status == 'Duplicate' else 'err') }}">{{ 'Imported' if stage == 'done' and r.status == 'OK' else r.status }}</span></td>
+{% for f, h, _a in cols %}<td>{{ r.data.get(f, '') }}</td>{% endfor %}<td>{{ r.msg }}</td></tr>{% endfor %}
+</table></div>
+{% endif %}
+{% endblock %}
