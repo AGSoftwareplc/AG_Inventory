@@ -1,6 +1,6 @@
-# AG Inventory: tech stack
+# Mizan: tech stack
 
-AG Inventory is a **web app**. One PC in the shop runs it. Staff use it in a browser on that PC, or on phones, tablets and other PCs on the shop Wi-Fi. No internet, Docker or database server is needed.
+Mizan is a **web app**. One PC in the shop runs it. Staff use it in a browser on that PC, or on phones, tablets and other PCs on the shop Wi-Fi. No internet, Docker or database server is needed.
 
 ## At a glance
 

@@ -512,7 +512,7 @@ def restore_db(uploaded_path):
     try:
         ok = con.execute("SELECT 1 FROM sqlite_master WHERE name='products'").fetchone()
         if not ok:
-            raise RuleError('This file is not an AG Inventory backup.')
+            raise RuleError('This file is not an Mizan backup.')
     except sqlite3.DatabaseError:
         raise RuleError('This file is not a valid database backup.')
     finally:
