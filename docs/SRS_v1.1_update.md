@@ -1,6 +1,6 @@
 # Additional Software Requirements: Requirements Update, Version 1.1
 
-Small Shop Inventory Management System (AG Inventory). This update adds to the existing SRS
+Small Shop Inventory Management System (Mizan, formerly AG Inventory). This update adds to the existing SRS
 (`Shop_Inventory_SRS_v1.1.docx`). Requirements are grouped as functional requirements, business rules
 and reporting requirements.
 
