@@ -22,6 +22,8 @@ PERMS = {
     'sales_cancel': 'Cancel sales',
     'payments': 'Record customer / supplier payments',
     'credit': 'Sell on credit (unpaid or partly paid sales)',
+    'price_change': 'Change the selling price during a sale',
+    'manual_sales': 'Record manual sales (sales made outside the app)',
     'customers': 'Manage customers',
     'products': 'Manage products and categories',
     'inventory': 'View stock and movements',
@@ -93,7 +95,8 @@ def products_select(con, branch_sql):
             'FROM main.products p LEFT JOIN main.product_stock s ON s.product_id=p.id AND s.branch_id=' + branch_sql)
 
 
-BRANCH_TABLES = ('sales', 'purchases', 'expenses', 'returns', 'stock_moves', 'stocktakes', 'stock_batches')
+BRANCH_TABLES = ('sales', 'purchases', 'expenses', 'returns', 'stock_moves', 'stocktakes', 'stock_batches',
+                 'purchase_returns')
 BRANCH_CHILDREN = (('sale_items', 'sale_id', 'sales'), ('sale_payments', 'sale_id', 'sales'),
                    ('purchase_items', 'purchase_id', 'purchases'), ('purchase_payments', 'purchase_id', 'purchases'),
                    ('stocktake_items', 'stocktake_id', 'stocktakes'), ('batch_moves', 'move_id', 'stock_moves'))
@@ -238,6 +241,17 @@ MIGRATIONS = [
     # FIFO batches and payments: the TT number / bank or mobile reference of each payment
     ('sale_payments', 'reference', "TEXT NOT NULL DEFAULT ''"),
     ('purchase_payments', 'reference', "TEXT NOT NULL DEFAULT ''"),
+    # requirements update v1.1: serial numbers, flexible selling price, manual sales, purchase returns
+    ('products', 'serial_tracked', 'INTEGER NOT NULL DEFAULT 0'),
+    ('purchase_items', 'expiry', 'TEXT'),
+    ('purchase_items', 'serials', "TEXT NOT NULL DEFAULT ''"),      # serial numbers typed on a draft
+    ('sale_items', 'default_price', 'INTEGER'),     # the product's selling price at the time; price = actual
+    ('sale_items', 'price_by', 'INTEGER'),          # user who changed the price (NULL = default price)
+    ('sales', 'manual', 'INTEGER NOT NULL DEFAULT 0'),     # 1 = sale made outside the app, recorded later
+    ('sales', 'entered_by', 'INTEGER'),             # user who recorded it (user_id = the actual seller)
+    ('sales', 'no_stock', 'INTEGER NOT NULL DEFAULT 0'),   # 1 = stock was already taken out before recording
+    ('sales', 'notes', "TEXT NOT NULL DEFAULT ''"),
+    ('returns', 'return_id', 'INTEGER'),            # purchase return document (purchase_returns)
 ]
 DEFAULT_PASSWORD = '123456'   # what "Reset to default password" sets; the user must change it at next login
 
@@ -247,6 +261,9 @@ def migrate(con):
         cols = {r['name'] for r in con.execute(f'PRAGMA table_info({table})')}
         if col not in cols:
             con.execute(f'ALTER TABLE {table} ADD COLUMN {col} {definition}')
+    # older sales: sold at the default price, recorded by the seller
+    con.execute('UPDATE sale_items SET default_price=price WHERE default_price IS NULL')
+    con.execute('UPDATE sales SET entered_by=user_id WHERE entered_by IS NULL')
 
 
 def open_batches(con, path, backup_dir=None):
@@ -553,6 +570,16 @@ def fmt_qty(q):
 def money_input(cents):
     """Value for an <input> (no thousands separator)."""
     return fmt_money(cents).replace(',', '')
+
+
+def fmt_signed(cents):
+    """Money with a sign and a colour: green +1,000.00 (good), red −1,000.00 (bad), grey 0.00 (neutral)."""
+    c = rnd(cents or 0)
+    if c > 0:
+        return Markup(f'<span class="vpos" title="positive">+{fmt_money(c)}</span>')
+    if c < 0:
+        return Markup(f'<span class="vneg" title="negative">−{fmt_money(-c)}</span>')
+    return Markup(f'<span class="vzero">{fmt_money(0)}</span>')
 
 
 def today():

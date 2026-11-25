@@ -1,0 +1,14 @@
+{% extends 'base.html' %}{% block title %}Serial {{ r.serial }}{% endblock %}
+{% block content %}
+<div class="head"><h1>Serial number <span class="serials">{{ r.serial }}</span></h1><a class="btn light" href="{{ url_for('products.view', pid=r.product_id, tab='serials') }}">Back to {{ r.name }}</a></div>
+<div class="card grid">
+  <div><label>Product</label><a href="{{ url_for('products.view', pid=r.product_id) }}">{{ r.name }}</a> ({{ r.code }})</div>
+  <div><label>Current status</label><span class="badge {{ 'ok' if r.status == 'In stock' else ('warn' if r.status in ('Sold', 'In transit') else 'err') }}">{{ r.status }}</span></div>
+  <div><label>Branch</label>{{ r.branch }}</div>
+  {% if r.purchase_id %}<div><label>Purchase</label><a href="{{ url_for('purchases.view', pur_id=r.purchase_id) }}">open purchase</a>{% if r.batch_id %} · batch <a href="{{ url_for('inventory.batch', bid=r.batch_id) }}">#{{ r.batch_id }}</a>{% endif %}</div>{% endif %}
+  {% if r.sale_id %}<div><label>Sale</label><a href="{{ url_for('sales.view', sid=r.sale_id) }}">open sale</a></div>{% endif %}
+</div>
+<h2>History</h2>
+<div class="card tablewrap" style="padding:0"><table><tr><th>Date</th><th>What happened</th><th>Reference</th><th>Branch</th><th>User</th></tr>
+{% for e in events %}<tr><td>{{ e.at }}</td><td>{{ e.event }}</td><td>{{ e.ref_no }}</td><td>{{ e.branch or '' }}</td><td>{{ e.username or '' }}</td></tr>{% endfor %}</table></div>
+{% endblock %}

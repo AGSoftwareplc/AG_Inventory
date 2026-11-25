@@ -304,3 +304,12 @@ body.loginpage main { position: relative; display: flex; flex-direction: column;
   .mini .side .lb, .mini .side .gtitle { display: revert; } .mini .side .gtitle { display: flex; }
   .mini .side a { justify-content: flex-start; padding: .3rem .6rem; }
 }
+
+/* Positive / negative values (requirements update 9.2): colour plus a + / − sign, never colour alone */
+.vpos { color: var(--ok); font-weight: 600; } .vneg { color: var(--err); font-weight: 600; } .vzero { color: var(--muted); }
+.badge.manual { background: #eee7fb; color: #6d3fc8; }
+.serials { font-family: ui-monospace, Consolas, monospace; font-size: .85rem; }
+.cart .ser { display: block; margin-top: .25rem; width: 100%; font-size: .85rem; }
+.cart input.price { width: 95px; text-align: right; }
+.sumgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: .6rem; }
+.sumgrid .card { margin: 0; } .sumgrid table td { padding: .2rem .3rem; }

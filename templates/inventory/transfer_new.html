@@ -11,7 +11,7 @@
   <div class="wide"><label>Notes</label><input name="notes" placeholder="e.g. driver, vehicle, reason"></div>
 </div>
 <div class="card tablewrap">
-<table id="lines"><tr><th>Product</th><th class="n">Quantity</th><th></th></tr></table>
+<table id="lines"><tr><th>Product</th><th class="n">Quantity</th><th>Serial numbers <span class="muted">(serial-numbered products)</span></th><th></th></tr></table>
 <div class="actions"><button type="button" class="light small" onclick="addLine()">+ Add line</button></div>
 </div>
 <div class="actions"><button>Send now</button><a class="btn light" href="{{ url_for('inventory.transfers') }}">Cancel</a></div>
@@ -21,6 +21,7 @@
   <td><select name="pid" style="min-width:240px"><option value="">Choose product…</option>
   {% for p in products %}<option value="{{ p.id }}">{{ p.name }} ({{ p.code }}), in stock {{ p.stock|qty }} {{ p.unit }}</option>{% endfor %}</select></td>
   <td class="n"><input name="qty" inputmode="decimal" style="width:110px;text-align:right"></td>
+  <td><textarea name="serials" rows="1" class="serials" placeholder="only for serial-numbered products"></textarea></td>
   <td><button type="button" class="x" onclick="this.closest('tr').remove()">×</button></td></tr></template>
 {% endif %}
 {% endblock %}

@@ -32,12 +32,16 @@ def index():
 
 
 def _lines(form):
+    """Lines of the purchase form: product, quantity, unit cost, optional expiry date and serial numbers."""
     pids, qtys, costs = form.getlist('pid'), form.getlist('qty'), form.getlist('cost')
+    n = len(pids)
+    exps = (form.getlist('expiry') + [''] * n)[:n]
+    sers = (form.getlist('serials') + [''] * n)[:n]
     lines = []
-    for pid, q, c in zip(pids, qtys, costs):
+    for pid, q, c, x, sn in zip(pids, qtys, costs, exps, sers):
         if not pid:
             continue
-        lines.append((int(pid), parse_qty(q), parse_money(c, 'Unit cost')))
+        lines.append((int(pid), parse_qty(q), parse_money(c, 'Unit cost'), x.strip() or None, sn))
     return lines
 
 
@@ -60,16 +64,20 @@ def edit(pur_id=None):
                     request.form.get('notes', '').strip(), lines, g.user['id'])
                 if request.form.get('confirm'):
                     rules.confirm_purchase(db, pur_id, g.user['id'])
-            flash('Purchase saved.', 'ok')
+            flash('Purchase confirmed: the goods are now in stock (one FIFO batch per line).'
+                  if request.form.get('confirm') else 'Draft saved. It does not change stock until you confirm it.', 'ok')
             return redirect(url_for('purchases.view', pur_id=pur_id))
         except RuleError as e:
             flash(str(e), 'error')
     items = db.execute('SELECT * FROM purchase_items WHERE purchase_id=?', (pur_id,)).fetchall() if pur else []
-    products = db.execute('SELECT id, code, name, unit, avg_cost FROM pv WHERE active=1 '
+    products = db.execute('SELECT id, code, name, unit, avg_cost, serial_tracked FROM pv WHERE active=1 '
                           'ORDER BY name').fetchall()
     sups = db.execute('SELECT id, name FROM suppliers WHERE active=1 ORDER BY name').fetchall()
+    from core import money_input, fmt_qty
+    existing = [[i['product_id'], fmt_qty(i['qty']).replace(',', ''), money_input(i['unit_cost']), i['expiry'] or '',
+                 i['serials']] for i in items]
     return render_template('purchases/edit.html', pur=pur, items=items, products=products, sups=sups,
-                           today=today())
+                           today=today(), existing=existing)
 
 
 @bp.route('/<int:pur_id>')
@@ -87,13 +95,20 @@ def view(pur_id):
         'p.id=i.product_id WHERE purchase_id=?', (pur_id,)).fetchall()]
     pays = db.execute('SELECT pp.*, u.username FROM purchase_payments pp LEFT JOIN users u ON '
                       'u.id=pp.user_id WHERE purchase_id=? ORDER BY pp.id', (pur_id,)).fetchall()
-    rets = db.execute("SELECT r.*, p.name, u.username FROM returns r JOIN products p ON p.id=r.product_id "
-                      "LEFT JOIN users u ON u.id=r.user_id WHERE kind='purchase' AND doc_id=? ORDER BY r.id",
-                      (pur_id,)).fetchall()
+    rets = db.execute("SELECT r.*, p.name, u.username, pr.ref_no AS doc_no FROM returns r JOIN products p ON "
+                      "p.id=r.product_id LEFT JOIN users u ON u.id=r.user_id LEFT JOIN purchase_returns pr ON "
+                      "pr.id=r.return_id WHERE kind='purchase' AND doc_id=? ORDER BY r.id", (pur_id,)).fetchall()
     batches = db.execute('SELECT b.*, p.name, p.unit FROM stock_batches b JOIN products p ON p.id=b.product_id '
                          'JOIN purchase_items i ON i.id=b.purchase_item_id WHERE i.purchase_id=? ORDER BY b.id',
                          (pur_id,)).fetchall()
+    docs = db.execute('SELECT r.*, u.username FROM purchase_returns r LEFT JOIN users u ON u.id=r.user_id '
+                      'WHERE purchase_id=? ORDER BY r.id', (pur_id,)).fetchall()
+    serials = {}
+    for r in db.execute('SELECT purchase_item_id, serial, status FROM serials WHERE purchase_id=? ORDER BY serial',
+                        (pur_id,)):
+        serials.setdefault(r['purchase_item_id'], []).append(r)
     return render_template('purchases/view.html', pur=pur, items=items, pays=pays, rets=rets, batches=batches,
+                           docs=docs, serials=serials,
                            gross=gross, balance=rules.purchase_balance(pur), methods=payment_methods(),
                            pay_status=rules.payment_status(pur['total'] - pur['returned_value'], pur['paid']),
                            today=today())
@@ -113,7 +128,8 @@ def _act(pur_id, fn, ok_msg):
 @bp.route('/<int:pur_id>/confirm', methods=['POST'])
 @requires('purchases')
 def confirm(pur_id):
-    return _act(pur_id, lambda db: rules.confirm_purchase(db, pur_id, g.user['id']), 'Purchase confirmed.')
+    return _act(pur_id, lambda db: rules.confirm_purchase(db, pur_id, g.user['id']),
+                'Purchase confirmed: the goods are now in stock (one FIFO batch per line).')
 
 
 @bp.route('/<int:pur_id>/cancel', methods=['POST'])
@@ -130,23 +146,30 @@ def receive(pur_id):
         got = {int(k[2:]): parse_qty(v, allow_zero=True)
                for k, v in request.form.items() if k.startswith('r_') and v.strip()}
         exp = {int(k[2:]): v.strip() for k, v in request.form.items() if k.startswith('x_') and v.strip()}
+        sers = {int(k[2:]): v for k, v in request.form.items() if k.startswith('s_')}
     except RuleError as e:
         return fail(e, 'purchases.view', pur_id=pur_id)
-    return _act(pur_id, lambda db: rules.receive_purchase(db, pur_id, got, g.user['id'], exp),
+    return _act(pur_id, lambda db: rules.receive_purchase(db, pur_id, got, g.user['id'], exp, sers),
                 'Received into stock. Each line is now a stock batch (FIFO).')
 
 
 @bp.route('/<int:pur_id>/return', methods=['POST'])
 @requires('receive')
 def ret(pur_id):
+    """A return to the supplier: its own transaction (PR number) for one or more lines of this purchase.
+    Form: q_<item>, why_<item>, sn_<item> per line (or item_id, qty, reason for a single line)."""
+    f = request.form
     try:
-        qty = parse_qty(request.form.get('qty'))
-        item_id = int(request.form['item_id'])
-    except (RuleError, ValueError, KeyError) as e:
+        if f.get('item_id'):
+            lines = [(int(f['item_id']), parse_qty(f.get('qty')), f.get('reason', ''), f.get('serials', ''))]
+        else:
+            lines = [(int(k[2:]), parse_qty(v, allow_zero=True), f.get('why_' + k[2:], '') or f.get('reason', ''),
+                      f.get('sn_' + k[2:], '')) for k, v in f.items() if k.startswith('q_') and v.strip()]
+    except (RuleError, ValueError) as e:
         return fail(e if isinstance(e, RuleError) else 'Choose a line.', 'purchases.view', pur_id=pur_id)
-    return _act(pur_id, lambda db: rules.purchase_return(db, pur_id, item_id, qty, request.form.get('reason'),
-                                                          g.user['id'], today()),
-                'Returned to supplier. Stock and amount owed were reduced.')
+    return _act(pur_id, lambda db: rules.purchase_return_doc(db, pur_id, lines, g.user['id'],
+                                                              f.get('date') or today(), f.get('notes', '').strip()),
+                'Return to supplier recorded. Stock and the amount owed were reduced.')
 
 
 @bp.route('/<int:pur_id>/pay', methods=['POST'])

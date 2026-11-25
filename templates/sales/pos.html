@@ -29,12 +29,12 @@
     <p><label>Customer</label><select name="customer_id" id="cust"><option value="">Walk-in customer</option>
       {% for c in customers %}<option value="{{ c.id }}">{{ c.name }}{{ ' · ' ~ c.phone if c.phone }}</option>{% endfor %}</select></p>
     <button class="big" style="width:100%" id="paybtn">Complete sale</button>
-    <p class="muted" style="font-size:.85rem">Tip: Enter adds the first match. Leave "Amount paid" empty to take the exact total.{% if allow_credit %} For a credit sale choose the customer and type what they pay now (0 if nothing).{% endif %}</p>
+    <p class="muted" style="font-size:.85rem">Tip: Enter adds the first match. Scanning a serial number adds that item. Leave "Amount paid" empty to take the exact total.{% if allow_price %} You may change a price in the cart: the default price is kept beside it.{% endif %}{% if allow_credit %} For a credit sale choose the customer and type what they pay now (0 if nothing).{% endif %}</p>
     <input type="hidden" id="credit_ok" value="{{ '1' if allow_credit else '' }}">
   </form>
 </div>
 {% endblock %}
 {% block scripts %}
-<script>var POS = {search: "{{ url_for('sales.api_products') }}"};</script>
+<script>var POS = {search: "{{ url_for('sales.api_products') }}", serials: "{{ url_for('sales.api_serials') }}", price: {{ 'true' if allow_price else 'false' }}};</script>
 <script src="{{ url_for('static', filename='pos.js') }}"></script>
 {% endblock %}

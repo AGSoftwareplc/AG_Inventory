@@ -1,17 +1,18 @@
 {% extends 'base.html' %}{% block title %}Sales{% endblock %}
 {% block content %}
-<div class="head"><h1>Sales history</h1>{% if can('pos') %}<a class="btn" href="{{ url_for('sales.pos') }}">New sale</a>{% endif %}</div>
+<div class="head"><h1>Sales history</h1><div>{% if can('manual_sales') %}<a class="btn light" href="{{ url_for('sales.manual') }}">+ Manual sale</a> {% endif %}{% if can('pos') %}<a class="btn" href="{{ url_for('sales.pos') }}">New sale</a>{% endif %}</div></div>
 <form class="filters">{% include '_range.html' %}
   <div><label>Status</label><select name="status"><option value="">All</option>{% for v,l in [('Completed','Completed'),('Cancelled','Cancelled'),('paid','Fully paid'),('partial','Partially paid'),('unpaid','Unpaid'),('credit','Owing (partly paid or unpaid)')] %}<option value="{{ v }}" {{ 'selected' if status == v }}>{{ l }}</option>{% endfor %}</select></div>
+  <div><label>Recorded</label><select name="source">{% for v,l in [('','POS and manual'),('pos','POS only'),('manual','Manual sales only')] %}<option value="{{ v }}" {{ 'selected' if source == v }}>{{ l }}</option>{% endfor %}</select></div>
   <div class="grow"><label>Receipt no., customer or TT No.</label><input name="q" value="{{ q }}"></div>
   <div style="flex:0"><button>Show</button></div></form>
-<p><b>{{ totals.n }}</b> completed sales · net <b>{{ totals.total|money }}</b> {{ currency }}</p>
+<p><b>{{ totals.n|qty }}</b> completed sales · net <b>{{ totals.total|money }}</b> {{ currency }}</p>
 <div class="card tablewrap" style="padding:0"><table>
-<tr><th>Receipt</th><th>Date</th><th>Customer</th><th>By</th><th>Status</th><th>Payment</th><th class="n">Total</th><th class="n">Returns</th><th class="n">Owed</th></tr>
+<tr><th>Receipt</th><th>Date</th><th>Customer</th><th>Seller</th><th>Status</th><th>Payment</th><th>TT No. / ref.</th><th class="n">Total</th><th class="n">Returns</th><th class="n">Owed</th></tr>
 {% for s in rows %}{% set owed = s.total - s.refunded - s.paid %}
-<tr><td><a href="{{ url_for('sales.view', sid=s.id) }}">{{ s.receipt_no }}</a></td><td>{{ s.date }}</td><td>{{ s.customer or 'Walk-in' }}</td><td>{{ s.username }}</td>
+<tr><td><a href="{{ url_for('sales.view', sid=s.id) }}">{{ s.receipt_no }}</a>{% if s.manual %} <span class="badge manual" title="Recorded by hand: made outside the app">Manual</span>{% endif %}</td><td>{{ s.date }}</td><td>{{ s.customer or 'Walk-in' }}</td><td>{{ s.username }}</td>
 <td><span class="badge {{ 'ok' if s.status == 'Completed' else 'err' }}">{{ s.status }}</span></td>
-<td>{% if s.status == 'Completed' %}{% set ps = pay_status(s.total - s.refunded, s.paid) %}<span class="badge {{ 'ok' if ps == 'Paid' else ('warn' if ps == 'Partially paid' else 'err') }}">{{ ps }}</span>{% endif %}</td><td class="n">{{ s.total|money }}</td>
+<td>{% if s.status == 'Completed' %}{% set ps = pay_status(s.total - s.refunded, s.paid) %}<span class="badge {{ 'ok' if ps == 'Paid' else ('warn' if ps == 'Partially paid' else 'err') }}">{{ ps }}</span>{% endif %}</td><td>{{ s.refs or '' }}</td><td class="n">{{ s.total|money }}</td>
 <td class="n">{{ s.refunded|money if s.refunded }}</td><td class="n">{{ owed|money if s.status == 'Completed' and owed > 0 }}</td></tr>
-{% else %}<tr><td colspan="9" class="muted">No sales in this period.</td></tr>{% endfor %}</table></div>
+{% else %}<tr><td colspan="10" class="muted">No sales in this period.</td></tr>{% endfor %}</table></div>
 {% endblock %}

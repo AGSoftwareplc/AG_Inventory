@@ -1,0 +1,23 @@
+{% extends 'base.html' %}{% from '_table.html' import report_table %}{% block title %}Daily report{% endblock %}
+{% block content %}
+<div class="head noprint"><h1>Daily transaction report</h1><a class="btn light" href="{{ url_for('reports.index') }}">All reports</a></div>
+<form class="filters noprint">
+  {% if branch_opts %}<div><label>Branch</label><select name="branch">{% for v, label, sel in branch_opts %}<option value="{{ v }}" {{ 'selected' if sel }}>{{ label }}</option>{% endfor %}</select></div>{% endif %}
+  <div><label>Date</label><input type="date" name="start" value="{{ start }}"></div>
+  <div><label>To <span class="muted">(optional)</span></label><input type="date" name="end" value="{{ end }}"></div>
+  <div><label>Seller</label><select name="seller"><option value="">All</option>{% for u in sellers %}<option value="{{ u.id }}" {{ 'selected' if fl.seller == u.id }}>{{ u.full_name }}</option>{% endfor %}</select></div>
+  <div><label>Transaction type</label><select name="type">{% for v, l in [('', 'POS and manual'), ('pos', 'POS sales'), ('manual', 'Manual sales')] %}<option value="{{ v }}" {{ 'selected' if fl.type == v }}>{{ l }}</option>{% endfor %}</select></div>
+  <div><label>Payment method</label><select name="method"><option value="">All</option>{% for m in methods %}<option {{ 'selected' if fl.method == m }}>{{ m }}</option>{% endfor %}</select></div>
+  <div style="flex:0"><button>Show</button></div>
+  <div style="flex:0"><button type="submit" name="format" value="xlsx" class="light">Excel</button></div>
+  <div style="flex:0"><button type="button" class="light" onclick="window.print()">Print / PDF</button></div>
+</form>
+<div class="print-only">{% include '_bizhead.html' %}</div>
+<p class="muted">{{ setting('shop_name') }} · {% if where %}{{ where }} · {% endif %}{{ start }}{{ ' to ' ~ end if end != start }} · amounts in {{ currency }}{% if fl.seller or fl.type or fl.method %} · <b>the seller, type and method filters apply to the sales part</b>{% endif %}</p>
+{% for sec, blocks in sections %}
+<h2>{{ loop.index }}. {{ sec }}</h2>
+{% for h, cols, rows, tot in blocks %}
+<div class="card"><h3 style="margin-top:0">{{ h }}</h3>{{ report_table(cols, rows, tot, 'Nothing on this day.') }}</div>
+{% endfor %}{% endfor %}
+<p class="muted noprint">Click a receipt or purchase number to see the transaction. To save as PDF: click "Print / PDF" and choose "Save as PDF".</p>
+{% endblock %}
