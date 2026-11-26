@@ -6,5 +6,5 @@ python -m venv .venv || (echo Python was not found. Install it from https://www.
 .venv\Scripts\python -m pip install --upgrade pip
 .venv\Scripts\python -m pip install -r requirements.txt
 echo.
-echo Installation finished. Double-click start.bat to run AG Inventory.
+echo Installation finished. Double-click start.bat to run Mizan.
 pause

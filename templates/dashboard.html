@@ -9,14 +9,14 @@
 </form>
 <div class="tiles dash{{ ' four' if show_money }}">
   {% if show_money %}
-  <div class="tile t-sell"><div class="k">Net sales</div><div class="v">{{ p.net_sales|money }}</div><div class="muted">{{ p.sales_count }} sales</div></div>
+  <div class="tile t-sell"><div class="k">Net sales</div><div class="v">{{ p.net_sales|money }}</div><div class="muted">{{ p.sales_count|qty }} sales</div></div>
   <div class="tile t-buy"><div class="k">Purchases</div><div class="v">{{ d.purchases|money }}</div></div>
   <div class="tile t-money"><div class="k">Expenses</div><div class="v">{{ p.expenses|money }}</div></div>
-  <div class="tile t-money {{ 'good' if p.gross_profit >= 0 else 'bad' }}"><div class="k">Gross profit</div><div class="v">{{ p.gross_profit|money }}</div></div>
-  <div class="tile t-money {{ 'good' if p.net_profit >= 0 else 'bad' }}"><div class="k">Est. net operating profit</div><div class="v">{{ p.net_profit|money }}</div></div>
+  <div class="tile t-money {{ 'good' if p.gross_profit >= 0 else 'bad' }}"><div class="k">Gross profit</div><div class="v">{{ p.gross_profit|signed }}</div></div>
+  <div class="tile t-money {{ 'good' if p.net_profit >= 0 else 'bad' }}"><div class="k">Est. net operating profit</div><div class="v">{{ p.net_profit|signed }}</div></div>
   <div class="tile t-stock"><div class="k">Stock value (at cost)</div><div class="v">{{ d.stock_value|money }}</div></div>
   {% else %}
-  <div class="tile t-sell"><div class="k">Sales</div><div class="v">{{ p.sales_count }}</div></div>
+  <div class="tile t-sell"><div class="k">Sales</div><div class="v">{{ p.sales_count|qty }}</div></div>
   {% endif %}
   <div class="tile t-stock"><div class="k">Active products</div><div class="v">{{ d.products }}</div></div>
   <div class="tile t-low {{ 'bad' if low }}"><div class="k">Low-stock products</div><div class="v">{{ low|length }}{{ '+' if low|length == 15 }}</div></div>
@@ -40,7 +40,7 @@
 
 {% set t = charts.trend %}
 <div class="card chart"><h2>{{ 'Net sales' if show_money else 'Number of sales' }} {{ 'per month' if t.monthly else 'per day' }}
-  <small class="muted">· total {{ t.total|money if show_money else t.total }}</small></h2>
+  <small class="muted">· total {{ t.total|money if show_money else t.total|qty }}</small></h2>
   <div class="trendwrap"><svg class="trend" viewBox="0 0 {{ t.W }} {{ t.H }}" role="img" aria-label="Sales per {{ 'month' if t.monthly else 'day' }}">
     {% for gl in t.grid %}<line x1="{{ t.L }}" x2="{{ t.W }}" y1="{{ gl.y }}" y2="{{ gl.y }}" class="{{ 'base' if loop.first else 'grid' }}"/>
     <text x="{{ t.L - 6 }}" y="{{ gl.y + 4 }}" text-anchor="end" class="ax">{{ gl.label }}</text>{% endfor %}
@@ -57,7 +57,7 @@
   <div class="hbars">{% for b in charts.branches %}
     <div class="hb"><span title="{{ b.branch }}">{{ b.branch }}</span><div class="track"><div class="fill s{{ loop.index0 % 4 + 1 }}" style="width:{{ '%.1f'|format([100 * b.net_sales / top, 0]|max) }}%"></div></div>
       <b>{{ b.net_sales|money }}</b></div>
-    <p class="muted hint" style="margin:-.2rem 0 .5rem">{{ b.sales_count }} sales · gross profit {{ b.gross_profit|money }} · stock value {{ b.stock_value|money }}</p>{% endfor %}
+    <p class="muted hint" style="margin:-.2rem 0 .5rem">{{ b.sales_count|qty }} sales · gross profit {{ b.gross_profit|signed }} · stock value {{ b.stock_value|money }}</p>{% endfor %}
   </div>
   <p class="muted hint"><a href="{{ url_for('reports.index', r='branch_sales', start=start, end=end) }}">Sales and profit by branch report</a></p>
 </div>{% endif %}

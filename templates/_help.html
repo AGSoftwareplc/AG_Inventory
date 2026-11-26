@@ -1,7 +1,7 @@
 {# User manual. Each <section> is one Help topic; the pop-up shows the topic for the current page. #}
 <section id="help-start" data-title="Getting started">
 <h2>Getting started</h2>
-<p>AG Inventory follows how goods move through the shop. You buy from suppliers, receive the goods into stock, sell them at the POS, and then check money and reports.</p>
+<p>Mizan follows how goods move through the shop. You buy from suppliers, receive the goods into stock, sell them at the POS, and then check money and reports.</p>
 <ol>
   <li><b>Starter logins</b> for each role:
     <ul><li>Administrator: <code>admin</code> / <code>admin123</code></li>
@@ -29,6 +29,8 @@
   <li><b>TT No. / payment reference:</b> for Telebirr, bank or mobile banking payments, type the transaction number. You can search sales by it later.</li>
   <li>Click <b>Complete sale</b>, then <b>Print receipt</b>.</li>
 </ol>
+<p><b>Change the price</b> (only roles with <i>Change the selling price during a sale</i>): type the new price in the cart. The product's default price stays unchanged and is kept beside the price sold, with the difference and your name. See the reports <i>Sold above / below the default price</i> and <i>Price variation by product</i>.</p>
+<p><b>Serial numbers</b> (phones, laptops and other products with serial numbers): scan the serial number in the search box, or add the product and then scan or pick each serial number under its name. The quantity is the number of serial numbers. A serial number that is already sold or not in stock is refused.</p>
 <p><b>Credit sale</b> (customer pays later): choose a registered customer and enter the part they paid now, or <b>0</b> if they pay nothing now. The sale is then <i>Partially paid</i> or <i>Unpaid</i>. You take the rest later on the sale page. Only roles with the <i>Sell on credit</i> permission can do this.</p>
 <p>The goods leave stock as soon as the sale is completed, whether it is paid or not. The stock is taken from the batch that expires first, then from the oldest batch (FIFO).</p>
 <p>The POS sells from the stock of the branch shown in the top bar, and the receipt number starts with that branch's code.</p>
@@ -46,6 +48,8 @@
   <li><b>Customer return:</b> open the sale, choose the item and quantity, and enter a reason. The items go back into stock, into the same batch they came from. The refund is the item's price after its share of any discount. The screen tells you how much cash to give back.</li>
   <li><b>Cancel a sale</b> (managers only): open the sale, enter a reason and click <b>Cancel sale</b>. All items go back into stock. A sale that already has returns can't be cancelled.</li>
   <li><b>Reprint a receipt:</b> open the sale and click <b>Receipt</b>.</li>
+  <li><b>Manual sale</b> (roles with <i>Record manual sales</i>): <b>Selling → Manual sale</b> records a sale made outside the app, for example on paper. Enter the real date, who actually sold, the products, prices and payment. Say whether the stock must be deducted now (FIFO) or <i>was already taken out</i>, so it is never deducted twice. A manual sale gets an <b>M</b> receipt number, a purple <i>Manual</i> label, and keeps both the seller and the person who recorded it. Use <i>Recorded</i> in Sales history to show only POS or only manual sales.</li>
+  <li><b>Serial numbers:</b> to return a serial-numbered item, type its serial number in the return form.</li>
 </ul>
 <p>Sales are never deleted. Every correction is recorded with the user and the reason.</p>
 </section>
@@ -59,13 +63,14 @@
 <h2>Buying stock: order, receive, pay</h2>
 <ol>
   <li><b>Purchases → New purchase:</b> choose the supplier and add product lines with the quantity and unit cost. Add the supplier's discount if there is one.
+    For goods with an expiry date, enter it on the line. For serial-numbered products, type or scan one serial number per item.
     <ul><li><b>Save as draft:</b> you can still change it, and stock isn't affected.</li>
-        <li><b>Save and confirm order:</b> the order is final.</li></ul></li>
-  <li><b>When the goods arrive:</b> open the purchase, check the <i>Receive now</i> quantities and click <b>Receive into stock</b>. If the goods have an expiry date, enter it in <i>Expiry date</i>. If only part arrived, enter what actually came. The rest can be received later, and the status shows <i>Partially Received</i>. Each line received becomes a <b>stock batch</b> with its own cost (see <i>Stock batches</i>).</li>
+        <li><b>Save and confirm (adds to stock):</b> this ends the purchase. Everything on it goes into stock at once; there is no separate receiving step. Each line becomes a <b>stock batch</b> with its date, quantity, cost and expiry date (see <i>Stock batches</i>).</li></ul></li>
   <li><b>Pay the supplier:</b> on the same page, use <i>Record payment to supplier</i>. Partial payments are fine: enter the amount, method, TT No. / reference and date. The balance owed and the payment status are shown.</li>
-  <li><b>Return to supplier:</b> for damaged or wrong goods, choose the line and quantity and enter a reason. The goods leave the batch that this purchase brought in, so stock and the amount owed both go down. If those goods were already sold, the return is refused.</li>
+  <li><b>Return to supplier:</b> a separate transaction after the purchase is confirmed. Open the purchase, enter the quantity to send back and a reason on each line (and the serial numbers for serial-numbered products), then click <b>Record return</b>. It gets its own number (PR-…) linked to the purchase. The goods leave the batch that this purchase brought in, so stock and the amount owed both go down. You can't return more than was received and is still in stock from this purchase.</li>
 </ol>
-<p><b>Cancel:</b> a purchase can be cancelled only before anything is received. After that, use a return.</p>
+<p><b>Cancel:</b> only a draft can be cancelled. Once confirmed, use a return.</p>
+<p>Purchases confirmed with an older version, before receiving became automatic, still show <i>Receive into stock</i>.</p>
 <p><b>Cost:</b> each delivery keeps its own cost (FIFO). The average cost shown on a product is the value of its batches still in stock. A purchase discount is spread over the lines.</p>
 </section>
 
@@ -109,6 +114,9 @@
   <li><b>Change a price:</b> edit the product. Old sales keep their old prices, and price changes are logged.</li>
   <li><b>Stop selling a product:</b> untick <i>Active</i>. A product that has been used can't be deleted.</li>
   <li><b>Categories:</b> group products, for example Drinks or Food. Use them in searches and reports.</li>
+  <li><b>Import from Excel:</b> on Products (or Categories) click <b>⬆ Import from Excel</b>, download the template, fill it in and upload it (Excel .xlsx or CSV). The file is checked first: every row shows <i>OK</i>, <i>Duplicate</i> (code or barcode already used) or <i>Error</i> with the reason, and a summary counts them. Click <b>Import</b> to save the correct rows. Download <b>Rows to correct</b>, fix them in Excel and upload that file again.</li>
+  <li><b>Product page:</b> click a product name to see its stock and batches, every sale (date, receipt, quantity, price sold and difference from the default price, seller, TT No. and batches used), every purchase, all stock movements and its serial numbers.</li>
+  <li><b>Serial numbers:</b> tick <i>Track serial numbers</i> on the product for goods where every item has its own number. Serial numbers are then entered when buying and chosen when selling; each one is unique and its page shows its whole life (purchased, sold, returned). For stock that was already in the shop, register the numbers on the product page, tab <i>Serial numbers</i>.</li>
 </ul>
 </section>
 
@@ -118,6 +126,7 @@
 <ul>
   <li><b>+ Add stock:</b> stock you found or a count that was too low. Enter how many to add.</li>
   <li><b>− Remove stock:</b> choose <b>Damaged</b>, <b>Expired</b>, <b>Lost</b> or <b>Correction</b> (the count was too high) and enter how many to remove.</li>
+  <li><b>Serial-numbered products:</b> type the serial number of each item added or removed.</li>
   <li><b>Batch</b> (optional): choose the batch it concerns, for example the batch that expired. When removing, leave it on <i>Automatic</i> to use FIFO (the batch that expires first, then the oldest).</li>
 </ul>
 <p>A reason is always required. Every adjustment is saved with your name and appears in the <i>Damaged / expired / lost</i> report.</p>
@@ -159,9 +168,12 @@
   <li><b>Sales:</b> by day, week or month; by product, category or user; returns; cancelled sales; sales by payment status (paid, partly paid, unpaid); customer payments with TT No.; outstanding customer balances; cost of goods sold by batch.</li>
   <li><b>Purchases:</b> history, by supplier, by product, outstanding supplier payments, outstanding supplier balances, supplier payments with TT No.</li>
   <li><b>Financial:</b> profit summary, expenses, payment collection by method.</li>
+  <li><b>Also:</b> selling above / below the default price, price variation by product, POS and manual sales, manual sales with seller and recorder, returns to suppliers, serial numbers.</li>
   <li><b>Branches</b> (administrators, with more than one branch): sales and profit by branch, stock by branch.</li>
 </ul>
 <p><b>Branch:</b> reports show the branch you work in. If you work in more than one branch, choose another in the <i>Branch</i> box. Administrators can also choose <i>All branches</i>.</p>
+<p><b>Daily report</b> (<b>Money &amp; reports → Daily report</b>): everything on one day (or a few days): sales (cash, bank and mobile, paid / partly / unpaid, POS / manual, by seller, price variations), purchases and returns, stock received / sold / returned / written off / adjusted, expenses, profit and outstanding balances. Filter by seller, POS or manual, and payment method. Click a receipt or purchase number to open it.</p>
+<p><b>Colours:</b> positive amounts such as profit are green with a <b>+</b>, negative amounts such as losses are red with a <b>−</b>. All amounts use a comma for thousands, for example 1,000.00.</p>
 <p><b>Excel</b> downloads the report as an .xlsx file. For a PDF, click <b>Print / PDF</b> and choose <i>Save as PDF</i> as the printer.</p>
 <p><b>Profit:</b> gross profit = sales after discounts and returns − the cost of the goods sold (the cost of the FIFO batches used). Net operating profit = gross profit − expenses.</p>
 </section>
@@ -201,7 +213,7 @@
   <dt><b>Other computers or phones can't open the app.</b></dt>
   <dd>Use the address shown in the black start window, for example <code>http://192.168.1.10:5000</code>, on the same Wi-Fi. Allow Python through the Windows firewall for private networks. The start window must stay open.</dd>
   <dt><b>"Not enough stock" when selling.</b></dt>
-  <dd>The goods were not received into the system. Receive the purchase, or correct the stock with <i>Adjust stock</i>.</dd>
+  <dd>The purchase is still a draft. Confirm it to put the goods in stock, or correct the stock with <i>Adjust stock</i>.</dd>
   <dt><b>"This form was already submitted".</b></dt>
   <dd>The page was sent twice, for example by a double click or a refresh. The first submission was saved, so nothing is missing.</dd>
   <dt><b>"Form expired".</b></dt>

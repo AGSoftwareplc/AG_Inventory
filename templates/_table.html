@@ -1,0 +1,10 @@
+{# One report table. cols = [(label, key, kind)], kind: text|money|signed|qty|num. A row with _url links its reference. #}
+{% macro cell(v, kind) %}{% if v is none %}{% elif kind == 'money' %}{{ v|money }}{% elif kind == 'signed' %}{{ v|signed }}{% elif kind == 'qty' %}{{ v|qty if v is not none }}{% elif kind == 'num' %}{{ '{:,}'.format(v) if v is number else (v if v is not none) }}{% else %}{{ v if v is not none }}{% endif %}{% endmacro %}
+{% macro report_table(cols, rows, tot={}, empty='No data for this selection.') %}
+<div class="tablewrap"><table>
+  <tr>{% for l, k, kind in cols %}<th class="{{ 'n' if kind != 'text' }}">{{ l }}</th>{% endfor %}</tr>
+  {% for r in rows %}<tr>{% for l, k, kind in cols %}<td class="{{ 'n' if kind != 'text' }}">{% if r._url and k in ('receipt_no', 'ref_no', 'ref') %}<a href="{{ r._url }}">{{ cell(r[k], kind) }}</a>{% else %}{{ cell(r[k], kind) }}{% endif %}</td>{% endfor %}</tr>
+  {% else %}<tr><td colspan="{{ cols|length }}" class="muted">{{ empty }}</td></tr>{% endfor %}
+  {% if tot and rows %}<tr class="total"><td>Total</td>{% for l, k, kind in cols[1:] %}<td class="n">{% if k in tot %}{{ cell(tot[k], kind if kind in ('money', 'signed', 'num') else 'qty') }}{% endif %}</td>{% endfor %}</tr>{% endif %}
+</table></div>
+{% endmacro %}

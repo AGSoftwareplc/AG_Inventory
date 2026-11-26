@@ -19,6 +19,7 @@
   {% endif %}
   <div><label>Minimum stock level</label><input name="min_stock" inputmode="decimal" value="{{ f.min_stock if f.min_stock is defined else (p.min_stock|qty if p else '0') }}"></div>
   <div class="wide"><label>Description</label><textarea name="description" rows="2">{{ val('description') }}</textarea></div>
+  <div class="wide"><label><input type="checkbox" name="serial_tracked" value="1" {{ 'checked' if (f.serial_tracked if f.get('code') is not none else (p and p.serial_tracked)) }}> Track serial numbers <span class="muted">(each item has its own serial number, e.g. phones, laptops: needed when buying and selling)</span></label></div>
   {% if p %}<div><label><input type="checkbox" name="active" value="1" {{ 'checked' if p.active }}> Active (can be sold and purchased)</label></div>{% endif %}
 </div>
 <div class="actions"><button>Save product</button> <a class="btn light" href="{{ url_for('products.index') }}">Cancel</a></div>

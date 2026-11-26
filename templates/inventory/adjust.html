@@ -10,13 +10,14 @@
 <h2 style="margin-top:0">{{ 'Add stock' if add else 'Remove stock' }}</h2>
 <div class="grid">
   <div class="wide"><label>Product *</label><select name="product_id" id="pid" required><option value="">Choose…</option>
-  {% for p in products %}<option value="{{ p.id }}" {{ 'selected' if sel == p.id }}>{{ p.name }} ({{ p.code }}), in stock {{ p.stock|qty }} {{ p.unit }}</option>{% endfor %}</select></div>
+  {% for p in products %}<option value="{{ p.id }}" data-ser="{{ p.serial_tracked }}" {{ 'selected' if sel == p.id }}>{{ p.name }} ({{ p.code }}), in stock {{ p.stock|qty }} {{ p.unit }}{{ ' · serial no.' if p.serial_tracked }}</option>{% endfor %}</select></div>
   {% if add %}<input type="hidden" name="kind" value="correction">
   {% else %}<div><label>Type *</label><select name="kind">
     <option value="damaged">Damaged</option><option value="expired">Expired</option>
     <option value="lost">Lost / missing</option><option value="correction">Correction (count was too high)</option></select></div>{% endif %}
   <div><label>Quantity * <span class="muted">({{ 'how many to add' if add else 'how many to remove' }})</span></label><input name="qty" inputmode="decimal" required placeholder="e.g. 2"></div>
   <div class="wide"><label>Batch <span class="muted">({{ 'optional: add to a batch like this one (same cost and dates)' if add else 'optional: for example the batch that expired' }})</span></label><select name="batch_id" id="batch" data-sel="{{ request.args.get('batch', '') }}"><option value="">{{ 'New batch at the average cost' if add else 'Automatic (FIFO: expiring / oldest first)' }}</option></select></div>
+  <div class="wide" id="serbox" hidden><label>Serial numbers <span class="muted">({{ 'of the items added, one per item' if add else 'of the items removed, one per item' }})</span></label><textarea name="serials" rows="2" class="serials"></textarea></div>
   <div class="wide"><label>Reason *</label><input name="reason" required placeholder="{{ 'e.g. found in the store room' if add else 'e.g. broken during unloading' }}"></div>
 </div>
 <div class="actions"><button>{{ 'Add to stock' if add else 'Remove from stock' }}</button></div>
@@ -43,7 +44,9 @@
         });
       });
   }
+  function ser() { var o = pid.selectedOptions[0]; document.getElementById('serbox').hidden = !(o && o.dataset.ser === '1'); }
   pid.addEventListener('change', load);
-  load();
+  pid.addEventListener('change', ser);
+  load(); ser();
 })();
 </script>{% endblock %}

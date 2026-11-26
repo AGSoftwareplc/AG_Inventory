@@ -50,12 +50,12 @@ def adjust():
             with tx() as db:
                 rules.adjust_stock(db, int(request.form['product_id']), kind, qty,
                                    request.form.get('reason', ''), g.user['id'],
-                                   request.form.get('batch_id', type=int))
+                                   request.form.get('batch_id', type=int), request.form.get('serials'))
             flash('Stock added.' if qty > 0 else 'Stock removed.', 'ok')
             return redirect(url_for('inventory.adjust', mode=mode))
         except (RuleError, ValueError, KeyError) as e:
             flash(str(e) if isinstance(e, RuleError) else 'Choose a product.', 'error')
-    products = db.execute('SELECT id, code, name, unit, stock FROM pv WHERE active=1 '
+    products = db.execute('SELECT id, code, name, unit, stock, serial_tracked FROM pv WHERE active=1 '
                           'ORDER BY name').fetchall()
     recent = db.execute("SELECT m.*, p.name, p.unit, u.username FROM stock_moves m JOIN products p "
                         "ON p.id=m.product_id LEFT JOIN users u ON u.id=m.user_id WHERE m.ref_type="
@@ -213,8 +213,9 @@ def transfer_new():
     db = get_db()
     if request.method == 'POST':
         try:
-            lines = [(int(p), parse_qty(q)) for p, q in zip(request.form.getlist('pid'), request.form.getlist('qty'))
-                     if p]
+            pids = request.form.getlist('pid')
+            sers = (request.form.getlist('serials') + [''] * len(pids))[:len(pids)]
+            lines = [(int(p), parse_qty(q), sn) for p, q, sn in zip(pids, request.form.getlist('qty'), sers) if p]
             with tx() as db:
                 claim_once(db)
                 tid = rules.send_transfer(db, request.form.get('to_branch', type=int), lines,
@@ -224,7 +225,7 @@ def transfer_new():
         except RuleError as e:
             flash(str(e), 'error')
     dests = db.execute('SELECT * FROM branches WHERE active=1 AND id<>? ORDER BY id', (branch_id(),)).fetchall()
-    products = db.execute('SELECT id, code, name, unit, stock FROM pv WHERE active=1 AND stock>0 '
+    products = db.execute('SELECT id, code, name, unit, stock, serial_tracked FROM pv WHERE active=1 AND stock>0 '
                           'ORDER BY name').fetchall()
     return render_template('inventory/transfer_new.html', dests=dests, products=products)
 

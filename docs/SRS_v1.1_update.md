@@ -1,26 +1,78 @@
 # Additional Software Requirements: Requirements Update, Version 1.1
 
-Small Shop Inventory Management System (AG Inventory). This update adds to the existing SRS
+Small Shop Inventory Management System (Mizan, formerly AG Inventory). This update adds to the existing SRS
 (`Shop_Inventory_SRS_v1.1.docx`). Requirements are grouped as functional requirements, business rules
 and reporting requirements.
 
 ## Implementation status
 
-The owner asked to do sections 3 and 7 first and continue with the rest later.
+All sections are built (sections 3 and 7 first, the rest in the next update).
 
 | Section | Topic | Status |
 |---|---|---|
-| 1 | Product and category management (Excel import, product detail and sales history) | Pending |
-| 2 | Purchase management (confirmation adds stock, separate purchase returns) | Pending (batches per delivery and returns against the original purchase already work, see 3) |
-| **3** | **Inventory: FIFO and batch tracking, selling before expiry** | **In progress: built in this update** |
-| 4 | Serial number management | Pending |
-| 5 | Flexible selling price management | Pending |
-| 6 | Sales management and manual sales recording | Pending (the TT Number field is done as part of 7) |
-| **7** | **Payment management: due and partial payments** | **In progress: built in this update** |
-| 8 | Daily transaction reporting | Pending |
-| 9 | Number formatting and visual indicators | Pending (thousand separators are already used everywhere) |
-| 10 | Additional business rules | Rules 3, 9, 10, 11 and 13 done for sections 3 and 7; the rest pending |
-| 11 | Additional acceptance criteria | AC-019, AC-020, AC-026 (recording and searching TT numbers) and AC-029 done; the rest pending |
+| 1 | Product and category management (Excel import, product detail and sales history) | Done |
+| 2 | Purchase management (confirmation adds stock, separate purchase returns) | Done |
+| 3 | Inventory: FIFO and batch tracking, selling before expiry | Done |
+| 4 | Serial number management | Done |
+| 5 | Flexible selling price management | Done |
+| 6 | Sales management (TT Number) and manual sales recording | Done |
+| 7 | Payment management: due and partial payments | Done |
+| 8 | Daily transaction reporting | Done |
+| 9 | Number formatting and visual indicators | Done |
+| 10 | Additional business rules | Done |
+| 11 | Additional acceptance criteria | Done, see `docs/ACCEPTANCE.md` |
+
+### How the remaining sections were built
+
+**1. Excel import and product details**
+- Products → Import from Excel (also on Categories). Templates download as .xlsx; .xlsx and .csv files are read
+  without any extra program. The file is checked first and every row is shown as OK, Duplicate (code or
+  barcode already used, or twice in the file) or Error with the reason, with a summary. Only correct rows are
+  saved. The rows not imported download as an Excel file to correct and upload again.
+- The product page has tabs: sales history (date, receipt, qty, price sold and difference, seller, customer,
+  TT No., batches used, serial numbers), purchase history, stock movements, serial numbers and price changes.
+
+**2. Purchases**
+- "Save and confirm" ends the purchase: all lines go into stock at once as FIFO batches, with the expiry
+  date and serial numbers typed on the line. There is no receiving step. Purchases confirmed before this
+  update can still be received the old way.
+- A return to the supplier is its own transaction (number PR-…), for one or more lines, each with a reason,
+  linked to the original purchase. It can't exceed what was received, not yet returned and still in stock
+  from that purchase, and it takes the goods out of that purchase's batches.
+
+**4. Serial numbers**
+- Switched on per product ("Track serial numbers"). Serial numbers are typed or scanned on the purchase
+  (one per item, required to confirm), unique in the business, and linked to the product, batch and purchase.
+- At the POS a scanned serial number adds its product; each serial-numbered line needs one valid serial
+  per item. A serial can't be sold twice. Returns, cancellations, supplier returns, stock adjustments and
+  transfers move the serial numbers too. Each serial number has a history page (purchased, sold, returned,
+  current status). Stock already on hand can be given serial numbers on the product page.
+
+**5. Flexible selling price**
+- New permission "Change the selling price during a sale" (administrators always; give it to other roles in
+  Admin → Roles). The cart's price box can then be changed. Each sale line keeps the default price, the
+  price sold and the user who changed it. Reports: "Sold above / below the default price" and "Price
+  variation by product" (total variation and its effect on sales in %).
+
+**6. Manual sales**
+- New permission "Record manual sales". Selling → Manual sale records the real date, the actual seller,
+  customer, products, prices, payment and TT No. The person recording it is kept separately. It gets an
+  M receipt number and a "Manual" label everywhere. The user must say whether the stock is deducted now
+  (FIFO, with stock check) or was already taken out (no second deduction).
+- The TT No. column is shown in sales history and is searchable.
+
+**8. Daily report**
+- Money & reports → Daily report: sales (count, total, cash, bank and mobile, fully / partly / unpaid,
+  POS / manual, by seller, price variations, list of sales), purchases (count, total, products, returns,
+  paid, supplier balances), inventory (received, sold, returned, damaged / expired / lost, adjustments,
+  stock now, per product), expenses and the financial summary (revenue, cost of goods sold, gross and net
+  profit, customer and supplier balances). Filters: date or date range, seller, POS / manual, payment
+  method. Excel, Print / PDF, and every receipt or purchase number links to the transaction.
+
+**9. Numbers and colours**
+- All amounts and quantities use comma thousand separators (also in the POS and purchase screens, whatever
+  the computer's language). Positive values such as profit are green with "+", negative values red with "−",
+  zero grey, on the dashboard, reports, sale pages and the daily report.
 
 ### How sections 3 and 7 were built
 

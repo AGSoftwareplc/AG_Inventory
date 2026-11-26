@@ -6,4 +6,4 @@ python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' || { 
 python3 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install -r requirements.txt
-echo "Installation finished. Run ./start.sh to start AG Inventory."
+echo "Installation finished. Run ./start.sh to start Mizan."

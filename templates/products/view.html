@@ -1,28 +1,72 @@
 {% extends 'base.html' %}{% block title %}{{ p.name }}{% endblock %}
 {% block content %}
-<div class="head"><h1>{{ p.name }} <span class="muted">({{ p.code }})</span></h1>
+<div class="head"><h1>{{ p.name }} <span class="muted">({{ p.code }})</span>{% if p.serial_tracked %} <span class="badge">serial numbers</span>{% endif %}</h1>
 <div>{% if can('adjust') %}<a class="btn light" href="{{ url_for('inventory.adjust', pid=p.id) }}">Adjust stock</a>{% endif %}
 {% if can('products') %}<a class="btn" href="{{ url_for('products.edit', pid=p.id) }}">Edit</a>{% endif %}</div></div>
 <div class="tiles">
   <div class="tile {{ 'bad' if p.min_stock > 0 and p.stock <= p.min_stock }}"><div class="k">In stock</div><div class="v">{{ p.stock|qty }} {{ p.unit }}</div><div class="muted">minimum {{ p.min_stock|qty }}</div></div>
-  <div class="tile"><div class="k">Selling price</div><div class="v">{{ p.price|money }}</div></div>
+  <div class="tile"><div class="k">Selling price (default)</div><div class="v">{{ p.price|money }}</div></div>
+  <div class="tile"><div class="k">Sold (net of returns)</div><div class="v">{{ sold.q|qty }} {{ p.unit }}</div>{% if can('reports') %}<div class="muted">{{ sold.v|money }} {{ currency }}</div>{% endif %}</div>
   {% if can('reports') %}<div class="tile"><div class="k">Average cost (FIFO batches)</div><div class="v">{{ p.avg_cost|money }}</div></div>
   <div class="tile"><div class="k">Stock value</div><div class="v">{{ (p.stock * p.avg_cost)|money }}</div></div>{% endif %}
 </div>
-<div class="card"><p><b>Category:</b> {{ p.cat or '-' }} · <b>Barcode:</b> {{ p.barcode or '-' }} · <b>Status:</b> {{ 'Active' if p.active else 'Inactive' }}</p>{% if p.description %}<p>{{ p.description }}</p>{% endif %}</div>
+<div class="card"><p><b>Category:</b> {{ p.cat or '-' }} · <b>Unit:</b> {{ p.unit }} · <b>Barcode:</b> {{ p.barcode or '-' }} · <b>Status:</b> {{ 'Active' if p.active else 'Inactive' }}
+{% if p.serial_tracked %} · <b>Serial numbers in stock:</b> {{ in_stock_sn }} of {{ p.stock|qty }}{% endif %}</p>{% if p.description %}<p>{{ p.description }}</p>{% endif %}</div>
+
 <h2>Batches in stock (FIFO order: sold first at the top)</h2>
 <div class="card tablewrap" style="padding:0"><table>
 <tr><th>Batch</th><th>From</th><th>Received</th><th>Expiry</th><th class="n">In stock</th>{% if can('reports') %}<th class="n">Unit cost</th>{% endif %}</tr>
 {% for b in batches %}<tr><td><a href="{{ url_for('inventory.batch', bid=b.id) }}">#{{ b.id }}</a></td><td>{{ b.ref_no }}</td><td>{{ b.received }}</td><td>{{ b.expiry or '' }}</td><td class="n">{{ b.remaining|qty }} {{ p.unit }}</td>{% if can('reports') %}<td class="n">{{ b.unit_cost|money }}</td>{% endif %}</tr>
 {% else %}<tr><td colspan="6" class="muted">No stock in this branch.</td></tr>{% endfor %}
 </table></div>
-<h2>Recent stock movements</h2>
+
+{% set tabs = [('sales', 'Sales history'), ('purchases', 'Purchase history'), ('moves', 'Stock movements')] + ([('serials', 'Serial numbers')] if serials or p.serial_tracked else []) + ([('prices', 'Price changes')] if prices else []) %}
+<div class="tabs noprint" style="display:flex;gap:.4rem;flex-wrap:wrap;margin:1rem 0 .6rem">
+{% for k, l in tabs %}<a class="btn {{ '' if tab == k else 'light' }}" href="{{ url_for('products.view', pid=p.id, tab=k) }}">{{ l }}</a>{% endfor %}</div>
+
+{% if tab == 'sales' %}
+<div class="card tablewrap" style="padding:0"><table>
+<tr><th>Date</th><th>Receipt</th><th>Seller</th><th>Customer</th><th class="n">Qty</th><th class="n">Price sold</th><th class="n">vs default</th><th class="n">Total</th><th>TT No. / ref.</th><th>Batches used</th>{% if serials %}<th>Serial no.</th>{% endif %}<th>Status</th></tr>
+{% for r in sales %}{% set dp = r.default_price if r.default_price is not none else r.price %}<tr>
+<td>{{ r.date }}</td><td><a href="{{ url_for('sales.view', sid=r.sid) }}">{{ r.receipt_no }}</a>{% if r.manual %} <span class="badge manual">Manual</span>{% endif %}</td>
+<td>{{ r.seller }}</td><td>{{ r.customer or 'Walk-in' }}</td><td class="n">{{ r.qty|qty }}{% if r.returned_qty %} <span class="muted">({{ r.returned_qty|qty }} returned)</span>{% endif %}</td>
+<td class="n">{{ r.price|money }}</td><td class="n">{% if r.price != dp %}{{ ((r.price - dp) * r.qty)|signed }}{% endif %}</td><td class="n">{{ (r.qty * r.price)|money }}</td>
+<td>{{ r.refs or '' }}</td><td class="muted" style="font-size:.85rem">{{ r.batches or '' }}</td>{% if serials %}<td class="serials">{{ r.serials or '' }}</td>{% endif %}
+<td>{% if r.status != 'Completed' %}<span class="badge err">{{ r.status }}</span>{% endif %}</td></tr>
+{% else %}<tr><td colspan="12" class="muted">Not sold yet in this branch.</td></tr>{% endfor %}
+</table></div>
+{% elif tab == 'purchases' %}
+<div class="card tablewrap" style="padding:0"><table>
+<tr><th>Date</th><th>Purchase</th><th>Supplier</th><th>Status</th><th class="n">Qty</th>{% if can('reports') %}<th class="n">Unit cost</th>{% endif %}<th class="n">Received</th><th class="n">Returned</th><th>Expiry</th><th>Batches</th></tr>
+{% for r in purchases %}<tr><td>{{ r.date }}</td><td>{% if can('purchases') or can('receive') %}<a href="{{ url_for('purchases.view', pur_id=r.pur_id) }}">{{ r.ref_no }}</a>{% else %}{{ r.ref_no }}{% endif %}</td><td>{{ r.supplier }}</td>
+<td>{{ 'Confirmed · in stock' if r.status == 'Received' else r.status }}</td><td class="n">{{ r.qty|qty }}</td>{% if can('reports') %}<td class="n">{{ r.unit_cost|money }}</td>{% endif %}
+<td class="n">{{ r.received_qty|qty }}</td><td class="n">{{ r.returned_qty|qty if r.returned_qty }}</td><td>{{ r.expiry or '' }}</td><td>{{ r.batches or '' }}</td></tr>
+{% else %}<tr><td colspan="10" class="muted">No purchases yet in this branch.</td></tr>{% endfor %}
+</table></div>
+{% elif tab == 'serials' %}
+{% if p.serial_tracked and (can('products') or can('adjust')) and p.stock - in_stock_sn > 0.0005 %}
+<form method="post" class="card" action="{{ url_for('products.register_serials', pid=p.id) }}">{{ csrf() }}
+<h2 style="margin-top:0">Register serial numbers for stock on hand</h2>
+<p class="muted">{{ (p.stock - in_stock_sn)|qty }} item(s) in stock have no serial number yet (for example stock from before serial numbers were switched on). Serial numbers of new purchases are entered on the purchase.</p>
+<label>Serial numbers (one per line, or separated by commas)</label><textarea name="serials" rows="3" class="serials"></textarea>
+<div class="actions"><button>Register</button></div></form>{% endif %}
+<div class="card tablewrap" style="padding:0"><table>
+<tr><th>Serial number</th><th>Status</th><th>Sale</th><th>Registered</th></tr>
+{% for r in serials %}<tr><td class="serials"><a href="{{ url_for('products.serial', sn=r.serial) }}">{{ r.serial }}</a></td>
+<td><span class="badge {{ 'ok' if r.status == 'In stock' else ('warn' if r.status in ('Sold', 'In transit') else 'err') }}">{{ r.status }}</span></td>
+<td>{% if r.sale_id %}<a href="{{ url_for('sales.view', sid=r.sale_id) }}">{{ r.receipt_no }}</a>{% endif %}</td><td>{{ r.created_at }}</td></tr>
+{% else %}<tr><td colspan="4" class="muted">No serial numbers registered yet.</td></tr>{% endfor %}
+</table></div>
+{% elif tab == 'moves' %}
 <div class="card tablewrap" style="padding:0"><table>
 <tr><th>Date</th><th>Type</th><th class="n">Qty</th><th class="n">Balance</th><th>Reference</th><th>Reason</th><th>User</th></tr>
-{% for m in moves %}<tr><td>{{ m.at }}</td><td>{{ m.move_type|replace('_',' ')|capitalize }}</td><td class="n">{{ '+' if m.qty > 0 }}{{ m.qty|qty }}</td><td class="n">{{ m.balance|qty }}</td><td>{{ m.ref_no }}</td><td>{{ m.reason }}</td><td>{{ m.username }}</td></tr>
+{% for m in moves %}<tr><td>{{ m.at }}</td><td>{{ labels.get(m.move_type, m.move_type) }}</td><td class="n">{{ '+' if m.qty > 0 }}{{ m.qty|qty }}</td><td class="n">{{ m.balance|qty }}</td><td>{{ m.ref_no }}</td><td>{{ m.reason }}</td><td>{{ m.username }}</td></tr>
 {% else %}<tr><td colspan="7" class="muted">No movements yet.</td></tr>{% endfor %}
 </table></div>
-<p><a href="{{ url_for('inventory.movements', pid=p.id, start='2000-01-01') }}">See all movements</a></p>
-{% if prices %}<h2>Price changes</h2><div class="card tablewrap" style="padding:0"><table><tr><th>Date</th><th class="n">Old</th><th class="n">New</th><th>User</th></tr>
-{% for c in prices %}<tr><td>{{ c.at }}</td><td class="n">{{ c.old_price|money }}</td><td class="n">{{ c.new_price|money }}</td><td>{{ c.username }}</td></tr>{% endfor %}</table></div>{% endif %}
+<p><a href="{{ url_for('inventory.movements', pid=p.id, start='2000-01-01') }}">All movements with date filter</a></p>
+{% elif tab == 'prices' %}
+<div class="card tablewrap" style="padding:0"><table><tr><th>Date</th><th class="n">Old</th><th class="n">New</th><th>User</th></tr>
+{% for c in prices %}<tr><td>{{ c.at }}</td><td class="n">{{ c.old_price|money }}</td><td class="n">{{ c.new_price|money }}</td><td>{{ c.username }}</td></tr>{% endfor %}</table></div>
+{% endif %}
+{% if tab in ('sales', 'purchases', 'moves') and limit < 2000 %}<p class="muted">Showing the latest {{ limit }}. <a href="{{ url_for('products.view', pid=p.id, tab=tab, all=1) }}">Show up to 2,000</a></p>{% endif %}
 {% endblock %}

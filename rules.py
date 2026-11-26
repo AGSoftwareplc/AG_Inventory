@@ -106,6 +106,107 @@ class Move:
         self.id, self.cost, self.stock = mid, cost, stock
 
 
+# ---------------------------------------------------------------- serial numbers
+# Products with serial_tracked = 1 have one serials row per item. Each serial is unique in the business,
+# belongs to one product, and keeps its whole life in serial_events (purchased, sold, returned, ...).
+def parse_serials(text):
+    """Serial numbers typed or scanned: one per line or separated by commas. Duplicates are refused."""
+    if isinstance(text, (list, tuple)):
+        items = [str(x).strip() for x in text]
+    else:
+        items = [x.strip() for x in (text or '').replace(';', ',').replace('\n', ',').split(',')]
+    out, seen = [], set()
+    for x in items:
+        if not x:
+            continue
+        if x.lower() in seen:
+            raise RuleError(f'Serial number {x} is entered twice.')
+        seen.add(x.lower())
+        out.append(x)
+    return out
+
+
+def _whole(p, qty):
+    if abs(qty - round(qty)) > EPS:
+        raise RuleError(f"{p['name']} has serial numbers: the quantity must be a whole number.")
+
+
+def serial_event(db, serial_id, event, uid, ref_type='', ref_id=None, ref_no='', branch=None):
+    db.execute('INSERT INTO serial_events(serial_id, event, ref_type, ref_id, ref_no, branch_id, user_id) '
+               'VALUES (?,?,?,?,?,?,?)', (serial_id, event, ref_type, ref_id, ref_no, branch or branch_id(), uid))
+
+
+def register_serials(db, p, serials, uid, event, branch=None, ref_type='', ref_id=None, ref_no='',
+                     batch_id=None, purchase_id=None, item_id=None):
+    """New serial-numbered items in stock (from a purchase, or stock already on hand)."""
+    branch = branch or branch_id()
+    for sn in serials:
+        old = db.execute('SELECT s.*, p.name FROM serials s JOIN products p ON p.id=s.product_id WHERE s.serial=?',
+                         (sn,)).fetchone()
+        if old:
+            raise RuleError(f"Serial number {sn} is already registered ({old['name']}, {old['status'].lower()}).")
+        sid = db.execute('INSERT INTO serials(product_id, serial, branch_id, status, batch_id, purchase_id, '
+                         "purchase_item_id) VALUES (?,?,?,'In stock',?,?,?)",
+                         (p['id'], sn, branch, batch_id, purchase_id, item_id)).lastrowid
+        serial_event(db, sid, event, uid, ref_type, ref_id, ref_no, branch)
+
+
+def serials_in_stock(db, pid, branch=None):
+    return db.execute("SELECT * FROM serials WHERE product_id=? AND branch_id=? AND status='In stock' ORDER BY serial",
+                      (pid, branch or branch_id())).fetchall()
+
+
+def serials_out(db, p, qty, serials, status, event, uid, ref_type='', ref_id=None, ref_no='', branch=None,
+                strict=False, sale=None, item_id=None, purchase_item=None, transfer=None):
+    """Serial-numbered items leaving stock (sold, returned to the supplier, damaged, sent to a branch, ...).
+
+    strict: every item must be named (sales). Otherwise items not named may come from stock that has no
+    serial number registered yet, but never from registered items."""
+    if not p['serial_tracked']:
+        return []
+    branch = branch or branch_id()
+    _whole(p, qty)
+    if len(serials) > round(qty):
+        raise RuleError(f"{p['name']}: {len(serials)} serial numbers entered for a quantity of {fmt_qty(qty)}.")
+    if strict and len(serials) != round(qty):
+        raise RuleError(f"{p['name']} needs a serial number for every item: {fmt_qty(qty)} needed, "
+                        f"{len(serials)} entered.")
+    rows = []
+    for sn in serials:
+        r = db.execute('SELECT * FROM serials WHERE serial=?', (sn,)).fetchone()
+        if not r or r['product_id'] != p['id']:
+            raise RuleError(f"Serial number {sn} is not registered for {p['name']}.")
+        if r['status'] == 'Sold':
+            raise RuleError(f'Serial number {sn} is already sold.')
+        if r['status'] != 'In stock' or r['branch_id'] != branch:
+            raise RuleError(f"Serial number {sn} is not in stock here ({r['status'].lower()}).")
+        if purchase_item and r['purchase_item_id'] != purchase_item:
+            raise RuleError(f'Serial number {sn} did not come with this purchase.')
+        rows.append(r)
+    if not strict and len(rows) < round(qty):
+        unnamed = round(qty) - len(rows)
+        free = _q(product(db, p['id'], branch)['stock'] - len(serials_in_stock(db, p['id'], branch)))
+        if unnamed > free + EPS:
+            raise RuleError(f"{p['name']}: enter the serial numbers of the items (only {fmt_qty(max(free, 0))} "
+                            f"in stock have no serial number).")
+    for r in rows:
+        db.execute('UPDATE serials SET status=?, sale_id=COALESCE(?, sale_id), sale_item_id=COALESCE(?, sale_item_id), '
+                   'transfer_id=COALESCE(?, transfer_id) WHERE id=?', (status, sale, item_id, transfer, r['id']))
+        serial_event(db, r['id'], event, uid, ref_type, ref_id, ref_no, branch)
+    return rows
+
+
+def serials_back(db, rows, uid, event, branch, ref_type='', ref_id=None, ref_no='', keep_sale=False):
+    """Serial-numbered items coming back into stock (customer return, cancelled sale or transfer)."""
+    for r in rows:
+        if keep_sale:
+            db.execute("UPDATE serials SET status='In stock', branch_id=? WHERE id=?", (branch, r['id']))
+        else:
+            db.execute("UPDATE serials SET status='In stock', branch_id=?, sale_id=NULL, sale_item_id=NULL WHERE id=?",
+                       (branch, r['id']))
+        serial_event(db, r['id'], event, uid, ref_type, ref_id, ref_no, branch)
+
+
 # ---------------------------------------------------------------- core stock movement
 def move_stock(db, pid, qty, move_type, uid, ref_type='', ref_id=None, ref_no='', reason='',
                in_cost=None, branch=None, batches=None, restore=None, layers=None, expiry=None,
@@ -198,9 +299,10 @@ def set_batch_expiry(db, batch_id, expiry):
     audit('batch_expiry', f"batch {batch_id} expiry {expiry or '-'}", db)
 
 
-def adjust_stock(db, pid, kind, qty, reason, uid, batch_id=None):
+def adjust_stock(db, pid, kind, qty, reason, uid, batch_id=None, serials=None):
     """Manual adjustment. kind: damaged/expired/lost (remove) or correction (signed qty).
-    batch_id: the batch it concerns (e.g. the expired one); default FIFO / a new batch."""
+    batch_id: the batch it concerns (e.g. the expired one); default FIFO / a new batch.
+    serials: serial numbers of the items (serial-numbered products)."""
     if not (reason or '').strip():
         raise RuleError('A reason is required for every stock adjustment.')
     if kind in OUT_TYPES:
@@ -219,7 +321,19 @@ def adjust_stock(db, pid, kind, qty, reason, uid, batch_id=None):
         else:  # found again: a batch like that one (same cost and dates)
             kw['layers'] = [(qty, b['unit_cost'], b['received'], b['expiry'])]
             kw['in_cost'] = b['unit_cost']
-    move_stock(db, pid, qty, kind, uid, ref_type='adjustment', reason=reason.strip(), **kw)
+    p = product(db, pid)
+    serials = parse_serials(serials)
+    if qty < 0:
+        serials_out(db, p, -qty, serials, OUT_TYPES.get(kind, 'Removed'), MOVE_LABELS[kind], uid, 'adjustment',
+                    ref_no=reason.strip())
+    m = move_stock(db, pid, qty, kind, uid, ref_type='adjustment', reason=reason.strip(), **kw)
+    if qty > 0 and p['serial_tracked']:
+        _whole(p, qty)
+        if len(serials) > round(qty):
+            raise RuleError(f'{len(serials)} serial numbers entered for a quantity of {fmt_qty(qty)}.')
+        bid = db.execute('SELECT batch_id FROM batch_moves WHERE move_id=? ORDER BY id DESC', (m.id,)).fetchone()
+        register_serials(db, p, serials, uid, 'Added by stock adjustment', ref_type='adjustment', ref_no=reason.strip(),
+                         batch_id=bid['batch_id'] if bid else None)
     audit('stock_adjust', f'product {pid} {kind} {qty}' + (f' batch {batch_id}' if batch_id else '') + f': {reason}', db)
 
 
@@ -238,12 +352,14 @@ def net_unit_cost(item, purchase, gross):
 
 
 def save_purchase(db, pur_id, supplier_id, date, discount, notes, lines, uid):
-    """Create or update a Draft purchase. lines = [(product_id, qty, unit_cost_cents)]."""
+    """Create or update a Draft purchase.
+    lines = [(product_id, qty, unit_cost_cents)] or [(product_id, qty, unit_cost_cents, expiry, serials_text)]."""
     if not lines:
         raise RuleError('Add at least one product line.')
     if not db.execute('SELECT 1 FROM suppliers WHERE id=?', (supplier_id,)).fetchone():
         raise RuleError('Choose a supplier.')
-    gross = sum(rnd(q * c) for _, q, c in lines)
+    lines = [tuple(l) + (None, '')[len(l) - 3:] for l in lines]
+    gross = sum(rnd(q * c) for _, q, c, _e, _s in lines)
     if discount > gross:
         raise RuleError('Discount cannot be larger than the purchase value.')
     total = gross - discount
@@ -260,10 +376,13 @@ def save_purchase(db, pur_id, supplier_id, date, discount, notes, lines, uid):
                          'user_id, branch_id) VALUES (?,?,?,?,?,?,?,?)',
                          (ref, supplier_id, date, discount, total, notes, uid, branch_id()))
         pur_id = cur.lastrowid
-    for pid, q, c in lines:
-        product(db, pid)
-        db.execute('INSERT INTO purchase_items(purchase_id, product_id, qty, unit_cost) '
-                   'VALUES (?,?,?,?)', (pur_id, pid, q, c))
+    for pid, q, c, exp, sers in lines:
+        p = product(db, pid)
+        sers = parse_serials(sers)
+        if p['serial_tracked']:
+            _whole(p, q)
+        db.execute('INSERT INTO purchase_items(purchase_id, product_id, qty, unit_cost, expiry, serials) '
+                   'VALUES (?,?,?,?,?,?)', (pur_id, pid, q, c, exp or None, '\n'.join(sers)))
     return pur_id
 
 
@@ -275,18 +394,25 @@ def _purchase(db, pur_id):
 
 
 def confirm_purchase(db, pur_id, uid):
+    """Confirming a purchase ends it: everything on it goes into stock now, each line as its own FIFO batch
+    (with its expiry date and serial numbers). There is no separate receiving step."""
     pur = _purchase(db, pur_id)
     if pur['status'] != 'Draft':
         raise RuleError('Only draft purchases can be confirmed.')
     db.execute("UPDATE purchases SET status='Confirmed' WHERE id=?", (pur_id,))
+    items = db.execute('SELECT * FROM purchase_items WHERE purchase_id=?', (pur_id,)).fetchall()
+    receive_purchase(db, pur_id, {i['id']: i['qty'] for i in items}, uid,
+                     {i['id']: i['expiry'] for i in items if i['expiry']},
+                     {i['id']: i['serials'] for i in items})
     audit('purchase_confirm', pur['ref_no'], db)
 
 
 def cancel_purchase(db, pur_id, reason, uid):
     pur = _purchase(db, pur_id)
-    if pur['status'] not in ('Draft', 'Confirmed'):
-        raise RuleError('A purchase can only be cancelled before anything is received. '
-                        'Use a supplier return instead.')
+    if pur['status'] not in ('Draft', 'Confirmed') or db.execute(
+            'SELECT 1 FROM purchase_items WHERE purchase_id=? AND received_qty>0', (pur_id,)).fetchone():
+        raise RuleError('This purchase is already in stock, so it cannot be cancelled. '
+                        'Record a supplier return instead.')
     if pur['paid'] > 0:
         raise RuleError('This purchase has payments recorded; it cannot be cancelled.')
     if not (reason or '').strip():
@@ -305,10 +431,12 @@ def _refresh_purchase_status(db, pur_id):
     db.execute('UPDATE purchases SET status=? WHERE id=?', (status, pur_id))
 
 
-def receive_purchase(db, pur_id, receipts, uid, expiries=None):
-    """receipts = {item_id: qty_received_now}; expiries = {item_id: 'YYYY-MM-DD'} (optional).
-    Each line received becomes a new FIFO batch at the net unit cost."""
-    expiries = expiries or {}
+def receive_purchase(db, pur_id, receipts, uid, expiries=None, serials=None):
+    """receipts = {item_id: qty_received_now}; expiries = {item_id: 'YYYY-MM-DD'} (optional);
+    serials = {item_id: serial numbers} (needed for serial-numbered products).
+    Each line received becomes a new FIFO batch at the net unit cost.
+    Used by confirm_purchase, and for older purchases that were confirmed before receiving was automatic."""
+    expiries, serials = expiries or {}, serials or {}
     pur = _purchase(db, pur_id)
     if pur['status'] not in ('Confirmed', 'Partially Received'):
         raise RuleError('Only confirmed purchases can be received.')
@@ -325,18 +453,51 @@ def receive_purchase(db, pur_id, receipts, uid, expiries=None):
         if q > left + EPS:
             p = product(db, it['product_id'])
             raise RuleError(f"{p['name']}: only {fmt_qty(left)} left to receive.")
+        p = product(db, it['product_id'], pur['branch_id'])
+        sers = parse_serials(serials.get(item_id))
+        if p['serial_tracked']:
+            _whole(p, q)
+            if len(sers) != round(q):
+                raise RuleError(f"{p['name']} has serial numbers: enter one serial number per item "
+                                f"({fmt_qty(q)} needed, {len(sers)} entered).")
         db.execute('UPDATE purchase_items SET received_qty=received_qty+? WHERE id=?', (q, item_id))
-        move_stock(db, it['product_id'], q, 'purchase', uid, 'purchase', pur_id, pur['ref_no'],
-                   in_cost=net_unit_cost(it, pur, gross), branch=pur['branch_id'],
-                   expiry=expiries.get(item_id), purchase_item=item_id)
+        m = move_stock(db, it['product_id'], q, 'purchase', uid, 'purchase', pur_id, pur['ref_no'],
+                       in_cost=net_unit_cost(it, pur, gross), branch=pur['branch_id'],
+                       expiry=expiries.get(item_id), purchase_item=item_id)
+        if p['serial_tracked']:
+            bid = db.execute('SELECT batch_id FROM batch_moves WHERE move_id=? ORDER BY id DESC', (m.id,)).fetchone()
+            register_serials(db, p, sers, uid, 'Purchased', pur['branch_id'], 'purchase', pur_id, pur['ref_no'],
+                             bid['batch_id'] if bid else None, pur_id, item_id)
         done += 1
     if not done:
         raise RuleError('Enter a quantity to receive.')
     _refresh_purchase_status(db, pur_id)
 
 
-def purchase_return(db, pur_id, item_id, qty, reason, uid, date):
+def purchase_return_doc(db, pur_id, lines, uid, date, notes=''):
+    """A return to the supplier as its own transaction, tied to the original (confirmed) purchase.
+    lines = [(item_id, qty, reason, serials_text)]. Returns (return id, credit)."""
     pur = _purchase(db, pur_id)
+    if pur['status'] not in ('Partially Received', 'Received'):
+        raise RuleError('Goods can only be returned on a confirmed purchase that is in stock.')
+    lines = [l for l in lines if l[1] > EPS]
+    if not lines:
+        raise RuleError('Enter the quantity to return on at least one line.')
+    ref = next_no(db, 'PR', 'purchase_returns', 'ref_no')
+    rid = db.execute('INSERT INTO purchase_returns(ref_no, purchase_id, date, notes, user_id, branch_id) '
+                     'VALUES (?,?,?,?,?,?)', (ref, pur_id, date, notes, uid, pur['branch_id'])).lastrowid
+    credit = 0
+    for item_id, qty, reason, sers in lines:
+        credit += purchase_return(db, pur_id, item_id, qty, reason, uid, date, sers, rid, ref)
+    db.execute('UPDATE purchase_returns SET amount=? WHERE id=?', (credit, rid))
+    audit('purchase_return_doc', f"{ref} for {pur['ref_no']}: {credit}", db)
+    return rid, credit
+
+
+def purchase_return(db, pur_id, item_id, qty, reason, uid, date, serials=None, return_id=None, return_no=''):
+    pur = _purchase(db, pur_id)
+    if pur['status'] not in ('Partially Received', 'Received'):
+        raise RuleError('Goods can only be returned on a confirmed purchase that is in stock.')
     it = db.execute('SELECT * FROM purchase_items WHERE id=? AND purchase_id=?',
                     (item_id, pur_id)).fetchone()
     if not it:
@@ -352,15 +513,18 @@ def purchase_return(db, pur_id, item_id, qty, reason, uid, date):
     own = db.execute('SELECT * FROM stock_batches WHERE purchase_item_id=? AND remaining>0.0005 ORDER BY id',
                      (item_id,)).fetchall()
     had = db.execute('SELECT 1 FROM stock_batches WHERE purchase_item_id=? LIMIT 1', (item_id,)).fetchone()
+    p = product(db, it['product_id'], pur['branch_id'])
+    serials_out(db, p, qty, parse_serials(serials), 'Returned to supplier', 'Returned to supplier', uid, 'purchase',
+                pur_id, return_no or pur['ref_no'], pur['branch_id'], purchase_item=item_id)
     move_stock(db, it['product_id'], -qty, 'purchase_return', uid, 'purchase', pur_id,
-               pur['ref_no'], reason=reason.strip(), branch=pur['branch_id'],
+               pur['ref_no'], reason=(f'{return_no}: ' if return_no else '') + reason.strip(), branch=pur['branch_id'],
                batches=own if had else None)
     db.execute('UPDATE purchase_items SET returned_qty=returned_qty+? WHERE id=?', (qty, item_id))
     db.execute('UPDATE purchases SET returned_value=returned_value+? WHERE id=?', (credit, pur_id))
     db.execute('INSERT INTO returns(kind, doc_id, item_id, product_id, qty, amount, cost, reason, '
-               'date, user_id, branch_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+               'date, user_id, branch_id, return_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
                ('purchase', pur_id, item_id, it['product_id'], qty, credit, cost, reason.strip(),
-                date, uid, pur['branch_id']))
+                date, uid, pur['branch_id'], return_id))
     audit('purchase_return', f"{pur['ref_no']} item {item_id} qty {qty}", db)
     return credit
 
@@ -391,31 +555,60 @@ def payment_status(total, paid):
 
 # ---------------------------------------------------------------- sales
 def create_sale(db, lines, discount, tendered, method, customer_id, uid, date,
-                allow_discount=False, allow_credit=True, reference=''):
-    """lines = [(product_id, qty)]. Prices and costs are taken from the database, not the browser.
+                allow_discount=False, allow_credit=True, reference='', allow_price=False,
+                manual=False, seller_id=None, deduct=True, notes=''):
+    """lines = [(product_id, qty)] or [(product_id, qty, price_cents_or_None, serials)].
+    Default prices and costs come from the database, not the browser. A different price is only taken
+    from users allowed to change prices; the default price is kept beside it so the difference is known.
+    Serial-numbered products need one valid, unsold serial number per item.
     Stock leaves when the sale is confirmed, whether it is fully paid, partly paid or unpaid.
-    The cost of each line is the cost of the FIFO batches it was taken from."""
+    The cost of each line is the cost of the FIFO batches it was taken from.
+
+    manual = a sale made outside the app, recorded later: seller_id is the actual seller, uid the user who
+    records it. deduct=False when the stock was already taken out (no second deduction)."""
     if not lines:
         raise RuleError('The cart is empty.')
     merged = {}
-    for pid, q in lines:
+    for line in lines:
+        pid, q = line[0], line[1]
+        price = line[2] if len(line) > 2 else None
+        sers = parse_serials(line[3] if len(line) > 3 else None)
         if q <= EPS:
             raise RuleError('Quantities must be greater than zero.')
-        merged[pid] = _q(merged.get(pid, 0) + q)
+        if price is not None and price < 0:
+            raise RuleError('A selling price cannot be negative.')
+        key = (pid, price)
+        old = merged.get(key, (0, []))
+        merged[key] = (_q(old[0] + q), old[1] + sers)
     if discount and not allow_discount:
         raise RuleError('You are not allowed to give discounts.')
     if customer_id and not db.execute('SELECT 1 FROM customers WHERE id=?', (customer_id,)).fetchone():
         raise RuleError('Customer not found.')
-    items, subtotal = [], 0
-    for pid, q in merged.items():
+    if manual:
+        if not seller_id or not db.execute('SELECT 1 FROM users WHERE id=?', (seller_id,)).fetchone():
+            raise RuleError('Choose the person who actually made the sale.')
+        if date > today():
+            raise RuleError('The sale date cannot be in the future.')
+    seller = seller_id if manual else uid
+    items, subtotal, need = [], 0, {}
+    for (pid, price), (q, sers) in merged.items():
         p = product(db, pid)
         if not p['active']:
             raise RuleError(f"{p['name']} is not active.")
-        if q > p['stock'] + EPS and setting('allow_negative') != '1':
+        need[pid] = _q(need.get(pid, 0) + q)
+        if deduct and need[pid] > p['stock'] + EPS and setting('allow_negative') != '1':
             raise RuleError(f"Not enough stock for {p['name']}: available {fmt_qty(p['stock'])} "
                             f"{p['unit']}.")
-        subtotal += rnd(q * p['price'])
-        items.append((p, q))
+        if price is None or price == p['price']:
+            price, changed = p['price'], False
+        elif not allow_price:
+            raise RuleError(f"You are not allowed to change the selling price ({p['name']}).")
+        else:
+            changed = True
+        if p['serial_tracked']:
+            _whole(p, q)
+        subtotal += rnd(q * price)
+        items.append((p, q, price, changed, sers))
     if discount > subtotal:
         raise RuleError('Discount cannot be larger than the subtotal.')
     total = subtotal - discount
@@ -426,18 +619,31 @@ def create_sale(db, lines, discount, tendered, method, customer_id, uid, date,
     if paid < total and not allow_credit:
         raise RuleError('You are not allowed to sell on credit. The full amount must be paid.')
     change = max(0, tendered - total)
-    receipt = next_no(db, 'S', 'sales', 'receipt_no')
-    sid = db.execute('INSERT INTO sales(receipt_no, customer_id, date, subtotal, discount, total, '
-                     'paid, tendered, change_due, method, user_id, branch_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
-                     (receipt, customer_id, date, subtotal, discount, total, paid, tendered,
-                      change, method, uid, branch_id())).lastrowid
-    for p, q in items:
-        m = move_stock(db, p['id'], -q, 'sale', uid, 'sale', sid, receipt)
-        db.execute('INSERT INTO sale_items(sale_id, product_id, qty, price, cost) VALUES (?,?,?,?,?)',
-                   (sid, p['id'], q, p['price'], m.cost))
+    receipt = next_no(db, 'M' if manual else 'S', 'sales', 'receipt_no')
+    sid = db.execute('INSERT INTO sales(receipt_no, customer_id, date, subtotal, discount, total, paid, tendered, '
+                     'change_due, method, user_id, branch_id, manual, entered_by, no_stock, notes) '
+                     'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                     (receipt, customer_id, date, subtotal, discount, total, paid, tendered, change, method,
+                      seller, branch_id(), 1 if manual else 0, uid, 0 if deduct else 1, (notes or '').strip())).lastrowid
+    for p, q, price, changed, sers in items:
+        iid = db.execute('INSERT INTO sale_items(sale_id, product_id, qty, price, cost, default_price, price_by) '
+                         'VALUES (?,?,?,?,0,?,?)', (sid, p['id'], q, price, p['price'],
+                                                    uid if changed else None)).lastrowid
+        if deduct:
+            serials_out(db, p, q, sers, 'Sold', 'Manual sale' if manual else 'Sold', uid, 'sale', sid, receipt,
+                        strict=True, sale=sid, item_id=iid)
+            cost = move_stock(db, p['id'], -q, 'sale', uid, 'sale', sid, receipt,
+                              reason='Manual sale' if manual else '').cost
+        else:  # stock already taken out earlier: record the sale at today's average cost, move nothing
+            cost = p['avg_cost']
+        db.execute('UPDATE sale_items SET cost=? WHERE id=?', (cost, iid))
+        if changed:
+            audit('sale_price_change', f"{receipt} {p['code']}: {p['price']} -> {price}", db)
     if paid > 0:
         db.execute('INSERT INTO sale_payments(sale_id, amount, method, date, user_id, reference) '
                    'VALUES (?,?,?,?,?,?)', (sid, paid, method, date, uid, (reference or '').strip()))
+    if manual:
+        audit('manual_sale', f"{receipt} seller {seller_id}" + ('' if deduct else ' (stock already deducted)'), db)
     return sid
 
 
@@ -453,8 +659,9 @@ def sale_balance(s):
     return s['total'] - s['refunded'] - s['paid']
 
 
-def sale_return(db, sid, item_id, qty, reason, uid, date):
-    """Customer return: stock back at the original cost, refund = value after discount share."""
+def sale_return(db, sid, item_id, qty, reason, uid, date, serials=None):
+    """Customer return: stock back at the original cost, refund = value after discount share.
+    Serial-numbered items: the serial numbers that come back (sold on this sale)."""
     s = _sale(db, sid)
     if s['status'] != 'Completed':
         raise RuleError('Returns are only possible on completed sales.')
@@ -468,10 +675,24 @@ def sale_return(db, sid, item_id, qty, reason, uid, date):
         raise RuleError(f'Only {fmt_qty(left)} can be returned on this line.')
     factor = s['total'] / s['subtotal'] if s['subtotal'] else 1
     refund = rnd(qty * it['price'] * factor)
+    p = product(db, it['product_id'], s['branch_id'])
+    back = []
+    if p['serial_tracked'] and not s['no_stock']:
+        _whole(p, qty)
+        names = parse_serials(serials)
+        sold = {r['serial'].lower(): r for r in db.execute("SELECT * FROM serials WHERE sale_item_id=? AND status='Sold'",
+                                                            (item_id,))}
+        if sold and len(names) != round(qty):
+            raise RuleError(f"Enter the serial number of each returned item ({fmt_qty(qty)} needed).")
+        for n in names:
+            if n.lower() not in sold:
+                raise RuleError(f'Serial number {n} was not sold on this sale.')
+            back.append(sold[n.lower()])
     # back into the batches the sale took them from, at their cost
     m = move_stock(db, it['product_id'], qty, 'sale_return', uid, 'sale', sid, s['receipt_no'],
                    reason=reason.strip(), in_cost=it['cost'], branch=s['branch_id'],
                    restore=doc_moves(db, 'sale', sid, it['product_id'], 'sale'))
+    serials_back(db, back, uid, 'Customer return', s['branch_id'], 'sale', sid, s['receipt_no'])
     db.execute('UPDATE sale_items SET returned_qty=returned_qty+? WHERE id=?', (qty, item_id))
     db.execute('UPDATE sales SET refunded=refunded+? WHERE id=?', (refund, sid))
     db.execute('INSERT INTO returns(kind, doc_id, item_id, product_id, qty, amount, cost, reason, '
@@ -495,6 +716,10 @@ def cancel_sale(db, sid, reason, uid):
         raise RuleError('A reason is required to cancel a sale.')
     for it in db.execute('SELECT * FROM sale_items WHERE sale_id=?', (sid,)).fetchall():
         left = _q(it['qty'] - it['returned_qty'])
+        if s['no_stock']:  # this sale never took stock out, so cancelling it puts nothing back
+            continue
+        serials_back(db, db.execute("SELECT * FROM serials WHERE sale_item_id=? AND status='Sold'", (it['id'],)).fetchall(),
+                     uid, 'Sale cancelled', s['branch_id'], 'sale', sid, s['receipt_no'])
         if left > EPS:
             move_stock(db, it['product_id'], left, 'sale_cancel', uid, 'sale', sid,
                        s['receipt_no'], reason=reason.strip(), in_cost=it['cost'], branch=s['branch_id'],
@@ -560,11 +785,13 @@ def send_transfer(db, to_branch, lines, notes, uid, date):
     dest = db.execute('SELECT * FROM branches WHERE id=? AND active=1', (to_branch,)).fetchone()
     if not dest or dest['id'] == src:
         raise RuleError('Choose another open branch to send to.')
-    merged = {}
-    for pid, q in lines:
+    merged, sers = {}, {}
+    for line in lines:
+        pid, q = line[0], line[1]
         if q <= EPS:
             raise RuleError('Quantities must be greater than zero.')
         merged[pid] = _q(merged.get(pid, 0) + q)
+        sers[pid] = sers.get(pid, []) + parse_serials(line[2] if len(line) > 2 else None)
     if not merged:
         raise RuleError('Add at least one product line.')
     ref = next_no(db, 'T', 'transfers', 'ref_no')
@@ -574,6 +801,8 @@ def send_transfer(db, to_branch, lines, notes, uid, date):
         p = product(db, pid, src)
         if p['stock'] < q - EPS:  # never send what the branch does not have
             raise RuleError(f"Not enough stock for {p['name']}: available {fmt_qty(p['stock'])} {p['unit']}.")
+        serials_out(db, p, q, sers[pid], 'In transit', f"Sent to {dest['name']}", uid, 'transfer', tid, ref, src,
+                    transfer=tid)
         m = move_stock(db, pid, -q, 'transfer_out', uid, 'transfer', tid, ref, reason=f"To {dest['name']}",
                        branch=src)
         db.execute('INSERT INTO transfer_items(transfer_id, product_id, qty, unit_cost) VALUES (?,?,?,?)',
@@ -600,6 +829,12 @@ def receive_transfer(db, tid, received, uid):
         q = _q(received.get(it['id'], it['qty']))
         if q < -EPS or q > it['qty'] + EPS:
             raise RuleError(f'Received quantity must be between 0 and {fmt_qty(it["qty"])}.')
+        moving = db.execute("SELECT * FROM serials WHERE transfer_id=? AND product_id=? AND status='In transit'",
+                            (tid, it['product_id'])).fetchall()
+        if moving and abs(q - it['qty']) > EPS:
+            raise RuleError('Serial-numbered items: receive the full quantity, then record any missing item as '
+                            'Lost with its serial number in Adjust stock.')
+        serials_back(db, moving, uid, 'Transfer received', t['to_branch'], 'transfer', tid, t['ref_no'])
         if q > EPS:
             # the receiving branch gets the same batches (cost, received and expiry dates) that left
             out = db.execute('SELECT bm.qty, bm.unit_cost, b.received, b.expiry FROM batch_moves bm JOIN stock_batches b '
@@ -622,6 +857,8 @@ def cancel_transfer(db, tid, reason, uid):
     t = _transfer(db, tid)
     if not (reason or '').strip():
         raise RuleError('A reason is required to cancel.')
+    serials_back(db, db.execute("SELECT * FROM serials WHERE transfer_id=? AND status='In transit'", (tid,)).fetchall(),
+                 uid, 'Transfer cancelled', t['from_branch'], 'transfer', tid, t['ref_no'])
     for it in db.execute('SELECT * FROM transfer_items WHERE transfer_id=?', (tid,)).fetchall():
         move_stock(db, it['product_id'], it['qty'], 'transfer_cancel', uid, 'transfer', tid, t['ref_no'],
                    reason=reason.strip(), in_cost=it['unit_cost'], branch=t['from_branch'],

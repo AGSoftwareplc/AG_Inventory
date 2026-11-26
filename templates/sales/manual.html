@@ -1,0 +1,66 @@
+{% extends 'base.html' %}{% block title %}Manual sale{% endblock %}
+{% block content %}
+<div class="head"><h1>Record a manual sale</h1><a class="btn light" href="{{ url_for('sales.index', source='manual') }}">Manual sales</a></div>
+<p class="muted">For a sale that was made outside the app (for example on paper while the computer was off). It gets an <b>M</b> receipt number and is marked <span class="badge manual">Manual</span> in sales history and reports. You are recorded as the person who entered it; choose who actually sold.</p>
+<form method="post">{{ csrf() }}{{ once() }}
+<div class="card grid">
+  <div><label>Actual sale date *</label><input type="date" name="date" value="{{ f.date or today }}" max="{{ today }}" required></div>
+  <div><label>Sold by (actual seller) *</label><select name="seller_id" required><option value="">Choose…</option>
+    {% for u in sellers %}<option value="{{ u.id }}" {{ 'selected' if f.seller_id|string == u.id|string }}>{{ u.full_name }} ({{ u.username }})</option>{% endfor %}</select></div>
+  <div><label>Customer</label><select name="customer_id"><option value="">Walk-in customer</option>
+    {% for c in customers %}<option value="{{ c.id }}" {{ 'selected' if f.customer_id|string == c.id|string }}>{{ c.name }}{{ ' · ' ~ c.phone if c.phone }}</option>{% endfor %}</select></div>
+  <div class="wide"><label>Stock *</label>
+    <label style="font-weight:normal"><input type="radio" name="stock" value="deduct" {{ 'checked' if f.stock != 'already' }}> Deduct the stock now (FIFO). The goods are still counted in stock in the app.</label>
+    <label style="font-weight:normal"><input type="radio" name="stock" value="already" {{ 'checked' if f.stock == 'already' }}> The stock was already taken out (for example with Adjust stock). Do not deduct it again.</label></div>
+</div>
+<div class="card tablewrap">
+<table id="lines"><tr><th>Product</th><th class="n">Quantity</th><th class="n">Price sold ({{ currency }})</th><th class="n">Line total</th><th>Serial numbers <span class="muted">(serial-numbered products)</span></th><th></th></tr></table>
+<div class="actions"><button type="button" class="light small" onclick="addLine()">+ Add line</button></div>
+<p class="muted">The price starts at the product's selling price. If it was sold at another price, type that price: the difference is recorded under your name.</p>
+</div>
+<div class="card grid">
+  <div><label>Discount ({{ currency }})</label><input name="discount" id="disc" inputmode="decimal" value="{{ f.discount or '' }}"></div>
+  <div><label>Total</label><input id="tot" disabled></div>
+  <div><label>Payment method</label><select name="method">{% for m in methods %}<option {{ 'selected' if f.method == m }}>{{ m }}</option>{% endfor %}</select></div>
+  <div><label>Amount paid ({{ currency }}) <span class="muted">(less than the total = credit sale, choose the customer)</span></label><input name="tendered" id="tendered" inputmode="decimal" value="{{ f.tendered or '' }}"></div>
+  <div><label>TT No. / payment reference</label><input name="reference" maxlength="60" value="{{ f.reference or '' }}"></div>
+  <div class="wide"><label>Notes</label><input name="notes" value="{{ f.notes or '' }}" placeholder="e.g. paper receipt no. 123"></div>
+</div>
+<div class="actions"><button>Save manual sale</button> <a class="btn light" href="{{ url_for('sales.index') }}">Cancel</a></div>
+</form>
+<template id="tpl"><tr>
+  <td><select name="pid" onchange="pick(this)" style="min-width:220px"><option value="">Choose product…</option>
+  {% for p in products %}<option value="{{ p.id }}" data-price="{{ p.price|money_input }}" data-ser="{{ p.serial_tracked }}">{{ p.name }} ({{ p.code }}), in stock {{ p.stock|qty }} {{ p.unit }}</option>{% endfor %}</select></td>
+  <td class="n"><input name="qty" inputmode="decimal" style="width:90px;text-align:right" oninput="calc()"></td>
+  <td class="n"><input name="price" inputmode="decimal" style="width:110px;text-align:right" oninput="calc()"></td>
+  <td class="n lt"></td>
+  <td><textarea name="serials" rows="1" class="serials" style="min-width:170px;visibility:hidden"></textarea></td>
+  <td><button type="button" class="x" onclick="this.closest('tr').remove();calc()">×</button></td></tr></template>
+{% endblock %}
+{% block scripts %}<script>
+function addLine() {
+  var row = document.getElementById('tpl').content.firstElementChild.cloneNode(true);
+  document.getElementById('lines').appendChild(row); return row;
+}
+function pick(sel) {
+  var tr = sel.closest('tr'), o = sel.selectedOptions[0];
+  tr.querySelector('[name=price]').value = o.dataset.price || '';
+  var sn = tr.querySelector('[name=serials]');
+  sn.style.visibility = o.dataset.ser === '1' ? 'visible' : 'hidden';
+  sn.placeholder = o.dataset.ser === '1' ? 'one per item' : '';
+  calc();
+}
+function num(v) { v = parseFloat(String(v || '').replace(/,/g, '')); return isNaN(v) ? 0 : v; }
+function fmt(v) { return v.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
+function calc() {
+  var sum = 0;
+  document.querySelectorAll('#lines tr').forEach(function (tr) {
+    var q = tr.querySelector('[name=qty]'); if (!q) return;
+    var t = num(q.value) * num(tr.querySelector('[name=price]').value);
+    tr.querySelector('.lt').textContent = fmt(t); sum += t;
+  });
+  document.getElementById('tot').value = fmt(sum - num(document.getElementById('disc').value));
+}
+document.getElementById('disc').addEventListener('input', calc);
+addLine(); addLine(); addLine();
+</script>{% endblock %}

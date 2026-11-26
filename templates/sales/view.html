@@ -2,24 +2,30 @@
 {% block content %}
 {% set done = s.status == 'Completed' %}
 <div class="head"><h1>Sale {{ s.receipt_no }} <span class="badge {{ 'ok' if done else 'err' }}">{{ s.status }}</span>
-{% if done %} <span class="badge {{ 'ok' if pay_status == 'Paid' else ('warn' if pay_status == 'Partially paid' else 'err') }}">{{ pay_status }}</span>{% endif %}</h1>
+{% if done %} <span class="badge {{ 'ok' if pay_status == 'Paid' else ('warn' if pay_status == 'Partially paid' else 'err') }}">{{ pay_status }}</span>{% endif %}
+{% if s.manual %} <span class="badge manual">Manual sale</span>{% else %} <span class="badge">POS sale</span>{% endif %}</h1>
 <div><a class="btn light" href="{{ url_for('sales.receipt', sid=s.id) }}">Receipt</a> <a class="btn light" href="{{ url_for('sales.index') }}">All sales</a></div></div>
 <div class="card grid">
-  <div><label>Date</label>{{ s.created_at }}</div><div><label>Sold by</label>{{ s.cashier }}</div>
+  <div><label>Date</label>{{ s.date if s.manual else s.created_at }}</div><div><label>Sold by</label>{{ s.cashier }}</div>
+  {% if s.manual %}<div><label>Recorded by</label>{{ s.recorder }} on {{ s.created_at }}</div>
+  <div><label>Stock</label>{{ 'Already deducted before recording (not changed by this sale)' if s.no_stock else 'Deducted when recorded (FIFO)' }}</div>{% endif %}
+  {% if s.notes %}<div class="wide"><label>Notes</label>{{ s.notes }}</div>{% endif %}
   <div><label>Customer</label>{% if s.customer_id %}<a href="{{ url_for('contacts.customer', rid=s.customer_id) }}">{{ s.customer }}</a>{% else %}Walk-in{% endif %}</div>
   <div><label>Payment</label>{{ s.method }}{% if s.refs %} · TT No. {{ s.refs }}{% endif %}</div>
   {% if s.cancel_reason %}<div class="wide"><label>Cancel reason</label>{{ s.cancel_reason }}</div>{% endif %}
 </div>
 <div class="card tablewrap" style="padding:0"><table>
-<tr><th>Product</th><th class="n">Qty</th><th class="n">Price</th><th class="n">Total</th><th class="n">Returned</th>{% if can('reports') %}<th class="n">Unit cost</th>{% endif %}</tr>
-{% for i in items %}<tr><td>{{ i.name }} <span class="muted">{{ i.code }}</span></td><td class="n">{{ i.qty|qty }} {{ i.unit }}</td><td class="n">{{ i.price|money }}</td>
+<tr><th>Product</th><th class="n">Qty</th><th class="n">Default price</th><th class="n">Price sold</th><th class="n">Difference</th><th class="n">Total</th><th class="n">Returned</th>{% if can('reports') %}<th class="n">Unit cost</th>{% endif %}</tr>
+{% for i in items %}{% set dp = i.default_price if i.default_price is not none else i.price %}<tr><td>{{ i.name }} <span class="muted">{{ i.code }}</span>{% if i.serials %}<div class="muted serials">S/N: {{ i.serials }}</div>{% endif %}</td><td class="n">{{ i.qty|qty }} {{ i.unit }}</td>
+<td class="n">{{ dp|money }}</td><td class="n">{{ i.price|money }}</td>
+<td class="n">{% if i.price != dp %}{{ ((i.price - dp) * i.qty)|signed }}<div class="muted" style="font-size:.8rem">changed by {{ i.price_user or '?' }}</div>{% else %}<span class="muted">none</span>{% endif %}</td>
 <td class="n">{{ (i.qty*i.price)|money }}</td><td class="n">{{ i.returned_qty|qty if i.returned_qty }}</td>{% if can('reports') %}<td class="n">{{ i.cost|money }}</td>{% endif %}</tr>{% endfor %}
-<tr><td colspan="3" class="n">Subtotal</td><td class="n">{{ s.subtotal|money }}</td><td colspan="2"></td></tr>
-<tr><td colspan="3" class="n">Discount</td><td class="n">−{{ s.discount|money }}</td><td colspan="2"></td></tr>
-<tr class="total"><td colspan="3" class="n">Total</td><td class="n">{{ s.total|money }}</td><td colspan="2"></td></tr>
-{% if s.refunded %}<tr><td colspan="3" class="n">Returns (refund value)</td><td class="n">−{{ s.refunded|money }}</td><td colspan="2"></td></tr>{% endif %}
-<tr><td colspan="3" class="n">Paid</td><td class="n">{{ s.paid|money }}</td><td colspan="2"></td></tr>
-{% if done and balance != 0 %}<tr><td colspan="3" class="n">{{ 'Customer owes' if balance > 0 else 'Refunded to customer' }}</td><td class="n">{{ balance|abs|money }}</td><td colspan="2"></td></tr>{% endif %}
+<tr><td colspan="5" class="n">Subtotal</td><td class="n">{{ s.subtotal|money }}</td><td colspan="2"></td></tr>
+<tr><td colspan="5" class="n">Discount</td><td class="n">−{{ s.discount|money }}</td><td colspan="2"></td></tr>
+<tr class="total"><td colspan="5" class="n">Total</td><td class="n">{{ s.total|money }}</td><td colspan="2"></td></tr>
+{% if s.refunded %}<tr><td colspan="5" class="n">Returns (refund value)</td><td class="n">−{{ s.refunded|money }}</td><td colspan="2"></td></tr>{% endif %}
+<tr><td colspan="5" class="n">Paid</td><td class="n">{{ s.paid|money }}</td><td colspan="2"></td></tr>
+{% if done and balance != 0 %}<tr><td colspan="5" class="n">{{ 'Customer owes' if balance > 0 else 'Refunded to customer' }}</td><td class="n">{{ balance|abs|money }}</td><td colspan="2"></td></tr>{% endif %}
 </table></div>
 {% if done %}<div class="row">
 {% if balance > 0 and can('payments') %}
@@ -32,7 +38,8 @@
 {% if can('returns') %}
 <form method="post" class="card" action="{{ url_for('sales.ret', sid=s.id) }}">{{ csrf() }}{{ once() }}<h2 style="margin-top:0">Customer return</h2>
 <div class="grid"><div class="wide"><label>Item</label><select name="item_id">{% for i in items if i.qty - i.returned_qty > 0.0005 %}<option value="{{ i.id }}">{{ i.name }} (up to {{ (i.qty - i.returned_qty)|qty }})</option>{% endfor %}</select></div>
-<div><label>Quantity</label><input name="qty" inputmode="decimal" required></div><div><label>Reason *</label><input name="reason" required></div></div>
+<div><label>Quantity</label><input name="qty" inputmode="decimal" required></div><div><label>Reason *</label><input name="reason" required></div>
+{% if items|selectattr('serials')|list %}<div class="wide"><label>Serial numbers of the returned items <span class="muted">(serial-numbered products)</span></label><input name="serials" class="serials"></div>{% endif %}</div>
 <div class="actions"><button class="light">Record return</button></div></form>{% endif %}
 {% if can('sales_cancel') and not s.refunded %}
 <form method="post" class="card" action="{{ url_for('sales.cancel', sid=s.id) }}" onsubmit="return confirm('Cancel this whole sale and put all items back in stock?')">{{ csrf() }}{{ once() }}<h2 style="margin-top:0">Cancel sale</h2>

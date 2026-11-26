@@ -1,4 +1,6 @@
-# AG Inventory
+# Mizan
+
+*Formerly "AG Inventory". The folder, repository and install paths keep the old `AG_Inventory` name so existing installs keep updating.*
 
 A simple web app for small and medium shops. It covers the whole flow from purchasing to the stock on the shelf: products, purchases and receiving, a point of sale (POS), returns, customers, suppliers, expenses, a dashboard and reports with Excel export.
 
