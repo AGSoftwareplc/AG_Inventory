@@ -1,5 +1,5 @@
 #!/bin/bash
-# Remove the AG Inventory service from this server. Touches nothing else.
+# Remove the Mizan service from this server. Touches nothing else.
 # The folder /opt/ag-inventory (with your data) is KEPT unless you add --delete-data.
 set -euo pipefail
 PORT="${AGINV_PORT:-4080}"
@@ -13,7 +13,7 @@ fi
 if [ "${1:-}" = "--delete-data" ]; then
     rm -rf /opt/ag-inventory
     userdel aginv 2>/dev/null || true
-    echo "AG Inventory and its data were removed."
+    echo "Mizan and its data were removed."
 else
-    echo "AG Inventory service removed. Your data is still in /opt/ag-inventory/data."
+    echo "Mizan service removed. Your data is still in /opt/ag-inventory/data."
 fi

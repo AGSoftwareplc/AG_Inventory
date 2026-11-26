@@ -1,5 +1,5 @@
 #!/bin/bash
-# AG Inventory - install or update on an Ubuntu server, side by side with other apps.
+# Mizan - install or update on an Ubuntu server, side by side with other apps.
 #
 #   sudo bash install.sh            install, or update to the latest version
 #   sudo bash install.sh --check    only look (changes nothing) and report what it would do
@@ -44,11 +44,11 @@ say "Checking the server (read only)"
 UPDATE=0
 if systemctl list-unit-files "${SERVICE}.service" --no-legend 2>/dev/null | grep -q "^${SERVICE}.service"; then
     UPDATE=1
-    echo "    AG Inventory is already installed here: this run will UPDATE it (data is kept)."
+    echo "    Mizan is already installed here: this run will UPDATE it (data is kept)."
 fi
 if [ "$UPDATE" -eq 0 ] && [ -d "$APP_DIR/.git" ] && id "$APP_USER" >/dev/null 2>&1; then
     UPDATE=1   # was uninstalled earlier with its data kept: set the service up again on the same data
-    echo "    An earlier AG Inventory folder was found: it will be reused (data is kept)."
+    echo "    An earlier Mizan folder was found: it will be reused (data is kept)."
 fi
 
 # Who is on the port?
@@ -56,7 +56,7 @@ PORT_OWNER="$(ss -ltnpH "sport = :${PORT}" 2>/dev/null || true)"
 if [ -n "$PORT_OWNER" ]; then
     OWN_PID="$(systemctl show -p MainPID --value "$SERVICE" 2>/dev/null || echo 0)"
     if [ "$UPDATE" -eq 1 ] && [ "${OWN_PID:-0}" != 0 ] && echo "$PORT_OWNER" | grep -q "pid=${OWN_PID},"; then
-        echo "    Port ${PORT}: used by AG Inventory itself (fine)."
+        echo "    Port ${PORT}: used by Mizan itself (fine)."
     else
         echo "$PORT_OWNER"
         die "port ${PORT} is already used by another program (shown above). Nothing was changed. Pick another port: sudo AGINV_PORT=4081 bash $0"
@@ -66,7 +66,7 @@ else
 fi
 
 if [ "$UPDATE" -eq 0 ] && [ -e "$APP_DIR" ]; then
-    die "${APP_DIR} already exists but is not an AG Inventory install. Nothing was changed."
+    die "${APP_DIR} already exists but is not a Mizan install. Nothing was changed."
 fi
 if [ "$UPDATE" -eq 0 ] && id "$APP_USER" >/dev/null 2>&1; then
     die "a user called ${APP_USER} already exists. Nothing was changed."
@@ -109,7 +109,7 @@ fi
 if [ "$UPDATE" -eq 0 ]; then
     say "Creating system user ${APP_USER} (no login shell)"
     useradd --system --home-dir "$APP_DIR" --no-create-home --shell /usr/sbin/nologin "$APP_USER"
-    say "Downloading AG Inventory to ${APP_DIR}"
+    say "Downloading Mizan to ${APP_DIR}"
     git clone --quiet --branch "$BRANCH" "$REPO" "$APP_DIR"
     chown -R "$APP_USER:$APP_USER" "$APP_DIR"
 else
@@ -127,7 +127,7 @@ sudo -u "$APP_USER" "$APP_DIR/.venv/bin/python" -m pip install --quiet -r "$APP_
 say "Writing ${UNIT}"
 cat > "$UNIT" <<UNITEOF
 [Unit]
-Description=AG Inventory (shop inventory web app) on port ${PORT}
+Description=Mizan (shop inventory web app) on port ${PORT}
 After=network-online.target
 Wants=network-online.target
 
@@ -155,7 +155,7 @@ UNITEOF
 
 systemctl daemon-reload
 systemctl enable --quiet "$SERVICE"
-# restarts only AG Inventory's own service
+# restarts only Mizan's own service
 systemctl restart "$SERVICE"
 
 if [ "$UFW_ACTIVE" -eq 1 ]; then
@@ -164,7 +164,7 @@ if [ "$UFW_ACTIVE" -eq 1 ]; then
 fi
 
 # ---------------------------------------------------------------- 3. confirm it answers
-say "Waiting for AG Inventory to answer on port ${PORT}"
+say "Waiting for Mizan to answer on port ${PORT}"
 ok=0
 for _ in $(seq 1 30); do
     if python3 -c "import urllib.request as u; u.build_opener(u.ProxyHandler({})).open('http://127.0.0.1:${PORT}/login', timeout=2)" 2>/dev/null; then
@@ -174,12 +174,12 @@ for _ in $(seq 1 30); do
 done
 if [ "$ok" -ne 1 ]; then
     journalctl -u "$SERVICE" -n 30 --no-pager || true
-    die "AG Inventory did not start (log above). Other apps were not touched."
+    die "Mizan did not start (log above). Other apps were not touched."
 fi
 
 IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 echo
-say "Done. AG Inventory is running."
+say "Done. Mizan is running."
 echo "    Open:        http://${IP:-<server-ip>}:${PORT}"
 echo "    First login: admin / admin123  (change it straight away)"
 echo "    Status:      sudo systemctl status ${SERVICE}"

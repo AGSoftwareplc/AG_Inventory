@@ -1,6 +1,6 @@
-# AG Inventory on an Ubuntu server
+# Mizan on an Ubuntu server
 
-Runs AG Inventory as its own service on port **4080**, next to other apps, without touching them.
+Runs Mizan as its own service on port **4080**, next to other apps, without touching them.
 
 ## Install
 
