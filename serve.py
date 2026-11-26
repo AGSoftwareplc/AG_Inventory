@@ -1,4 +1,4 @@
-"""Start AG Inventory for daily use in the shop (Waitress server).
+"""Start Mizan for daily use in the shop (Waitress server).
 
 Other computers, tablets and phones on the same Wi-Fi open http://<this-PC-IP>:5000
 """
@@ -20,7 +20,7 @@ if __name__ == '__main__':
         s.close()
     except OSError:
         ip = '127.0.0.1'
-    print('AG Inventory is running.')
+    print('Mizan is running.')
     print(f'  On this computer:      http://localhost:{port}')
     print(f'  Other devices (Wi-Fi): http://{ip}:{port}')
     print('Keep this window open. Press Ctrl+C to stop.')
