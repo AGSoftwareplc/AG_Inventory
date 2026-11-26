@@ -18,6 +18,8 @@ The requirements are in *Shop Inventory Management SRS v1.1*. [docs/ACCEPTANCE.m
 2. Copy the `AG_Inventory` folder to the shop PC, for example `C:\AG_Inventory`.
 3. Double-click **`install.bat`** and wait until it says *Installation finished*.
 
+**Windows Server, or a PC that should run the app in the background from boot:** follow [docs/WINDOWS_SERVER.md](docs/WINDOWS_SERVER.md). One script sets up the service, the firewall and daily backups.
+
 ### Linux
 ```sh
 sudo apt install python3 python3-venv   # if Python is not installed yet
