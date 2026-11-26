@@ -1,4 +1,4 @@
-"""AG Inventory: start the web app, login and shared page setup.
+"""Mizan: start the web app, login and shared page setup.
 
 Run for development:  python app.py
 Run in the shop:      python serve.py   (uses the Waitress server)

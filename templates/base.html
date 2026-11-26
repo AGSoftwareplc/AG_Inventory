@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}{{ setting('shop_name') }}{% endblock %} · AG Inventory</title>
+<title>{% block title %}{{ setting('shop_name') }}{% endblock %} · Mizan</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}?v=3" sizes="any">
 <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}?v=3">
@@ -77,7 +77,7 @@
   <div class="group g-help"><a href="#" onclick="openHelp();return false" title="Help / user manual"><span class="ic">❓</span><span class="lb">Help / user manual</span></a></div>
   <div class="group mobile-user"><div class="gtitle">{{ g.user.full_name }}</div>
     <a href="{{ url_for('auth.password') }}">Change password</a><a href="{{ url_for('auth.logout') }}">Log out</a></div>
-  <div class="poweredby" title="AG Inventory by AG Software PLC"><img src="{{ url_for('static', filename='ag-mark.png') }}?v=3" alt=""><span class="lb">Powered by <b>AG Software</b></span></div>
+  <div class="poweredby" title="Mizan by AG Software PLC"><img src="{{ url_for('static', filename='ag-mark.png') }}?v=3" alt=""><span class="lb">Powered by <b>AG Software</b></span></div>
 </aside>
 <script>
 // menu groups remember whether they are open; the current page's group is always open.

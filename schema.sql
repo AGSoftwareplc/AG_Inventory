@@ -1,4 +1,4 @@
--- AG Inventory database schema (SQLite).
+-- Mizan database schema (SQLite).
 -- Money columns are INTEGER cents. Quantities are REAL (decimal quantities allowed).
 PRAGMA foreign_keys = ON;
 
