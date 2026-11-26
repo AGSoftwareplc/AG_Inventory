@@ -1,4 +1,4 @@
-"""Back up all AG Inventory data: every business database, the platform file, logos and the secret key.
+"""Back up all Mizan data: every business database, the platform file, logos and the secret key.
 
 Safe while the app is running: databases are copied with SQLite's online backup.
 Each run makes one folder, backups\\server\\YYYYMMDD-HHMMSS, and keeps the newest copies (30 by default).

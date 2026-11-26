@@ -1,4 +1,4 @@
-# AG Inventory: one-time setup on Windows Server (or any always-on Windows PC).
+# Mizan: one-time setup on Windows Server (or any always-on Windows PC).
 #
 # Run in PowerShell as Administrator, from the AG_Inventory folder:
 #     powershell -ExecutionPolicy Bypass -File server\setup-windows-server.ps1
@@ -64,7 +64,7 @@ $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) 
     -RestartInterval (New-TimeSpan -Minutes 1) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
     -StartWhenAvailable -MultipleInstances IgnoreNew
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Principal $principal `
-    -Settings $settings -Description 'Runs the AG Inventory web app' -Force | Out-Null
+    -Settings $settings -Description 'Runs the Mizan web app' -Force | Out-Null
 
 Step "Creating the '$BackupTaskName' task (every day at $BackupTime)"
 $backupArgs = "`"$Root\server\backup_all.py`""
@@ -73,7 +73,7 @@ $bAction = New-ScheduledTaskAction -Execute "$Root\.venv\Scripts\python.exe" -Ar
 $bTrigger = New-ScheduledTaskTrigger -Daily -At $BackupTime
 $bSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 Register-ScheduledTask -TaskName $BackupTaskName -Action $bAction -Trigger $bTrigger -Principal $principal `
-    -Settings $bSettings -Description 'Backs up all AG Inventory data to backups\server' -Force | Out-Null
+    -Settings $bSettings -Description 'Backs up all Mizan data to backups\server' -Force | Out-Null
 
 if (-not $NoFirewall) {
     Step "Opening port $Port in Windows Firewall"
@@ -82,7 +82,7 @@ if (-not $NoFirewall) {
         -Action Allow -Profile Domain, Private | Out-Null
 }
 
-Step 'Starting AG Inventory'
+Step 'Starting Mizan'
 & "$PSScriptRoot\stop-server.ps1" -Quiet
 Start-ScheduledTask -TaskName $TaskName
 $ok = $false
@@ -94,7 +94,7 @@ $ips = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
     Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' } | ForEach-Object { $_.IPAddress }
 Write-Host ''
 if ($ok) {
-    Write-Host 'AG Inventory is running.' -ForegroundColor Green
+    Write-Host 'Mizan is running.' -ForegroundColor Green
     Write-Host "  On this server:      http://localhost:$Port"
     foreach ($ip in $ips) { Write-Host "  From shop devices:   http://${ip}:$Port" }
     Write-Host 'It starts by itself whenever the server starts. Log: logs\server.log'

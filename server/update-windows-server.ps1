@@ -1,4 +1,4 @@
-# Update AG Inventory on the server to the newest version from GitHub.
+# Update Mizan on the server to the newest version from GitHub.
 # Your data (data\) and backups (backups\) are kept. A backup is made first.
 # Run in PowerShell as Administrator, from the AG_Inventory folder:
 #     powershell -ExecutionPolicy Bypass -File server\update-windows-server.ps1
@@ -12,7 +12,7 @@ Write-Host '== Backing up the data first' -ForegroundColor Cyan
 & .venv\Scripts\python.exe server\backup_all.py
 if ($LASTEXITCODE -ne 0) { Write-Host 'Backup failed, update stopped.' -ForegroundColor Red; exit 1 }
 
-Write-Host '== Stopping AG Inventory' -ForegroundColor Cyan
+Write-Host '== Stopping Mizan' -ForegroundColor Cyan
 & "$PSScriptRoot\stop-server.ps1"
 
 if (-not $NoGit) {
@@ -28,6 +28,6 @@ if (-not $NoGit) {
 Write-Host '== Updating packages' -ForegroundColor Cyan
 & .venv\Scripts\python.exe -m pip install -r requirements.txt --quiet
 
-Write-Host '== Starting AG Inventory' -ForegroundColor Cyan
+Write-Host '== Starting Mizan' -ForegroundColor Cyan
 Start-ScheduledTask -TaskName 'AG Inventory'
 Write-Host 'Done. The database is updated automatically on start. Check logs\server.log if a page does not open.' -ForegroundColor Green

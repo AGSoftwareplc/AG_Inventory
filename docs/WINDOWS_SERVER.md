@@ -1,13 +1,15 @@
-# Hosting AG Inventory on Windows Server
+# Hosting Mizan on Windows Server
 
-This guide sets up AG Inventory on a Windows Server (2016, 2019, 2022 or 2025) so that it:
+*The app is now called Mizan. The scheduled tasks and firewall rule keep their old names (**AG Inventory**, **AG Inventory daily backup**, **AG Inventory (TCP 5000)**) so existing setups keep working.*
+
+This guide sets up Mizan on a Windows Server (2016, 2019, 2022 or 2025) so that it:
 
 - starts by itself when the server starts, with nobody logged in,
 - starts again by itself if it ever stops,
 - can be reached by every PC, tablet and phone on the shop network,
 - backs up all data every day.
 
-It also works the same way on an always-on Windows 10 or 11 PC. There is no Docker, no database server and no IIS needed. The app runs on **Waitress**, a production web server that is already part of AG Inventory (`serve.py`).
+It also works the same way on an always-on Windows 10 or 11 PC. There is no Docker, no database server and no IIS needed. The app runs on **Waitress**, a production web server that is already part of Mizan (`serve.py`).
 
 Plan about 20 minutes. Each step says what you should see when it worked.
 
@@ -36,7 +38,7 @@ To see the current address, open **Command Prompt** and run `ipconfig`. Look for
    *Install for all users* matters: the app runs as a background service account, which must be able to use Python.
 3. Check it: open a **new** Command Prompt and run `python --version`. You should see `Python 3.x.x`.
 
-## Step 3. Put AG Inventory on the server
+## Step 3. Put Mizan on the server
 
 Use the folder **`C:\AG_Inventory`**. A short path without spaces avoids problems.
 
@@ -77,7 +79,7 @@ The script does five things. You can run it again at any time; it only updates w
 When it worked you see:
 
 ```text
-AG Inventory is running.
+Mizan is running.
   On this server:      http://localhost:5000
   From shop devices:   http://192.168.1.10:5000
 It starts by itself whenever the server starts. Log: logs\server.log
@@ -97,7 +99,7 @@ Options, added to the end of the command:
 ## Step 5. Test from a shop device
 
 1. On a shop PC, tablet or phone on the same network, open a browser and go to the address the script showed, for example `http://192.168.1.10:5000`.
-2. The AG Inventory login page appears.
+2. The Mizan login page appears.
 3. Bookmark it, or on a phone or tablet use *Add to Home screen*.
 
 On the server itself, use <http://localhost:5000>.
@@ -185,7 +187,7 @@ IIS then sits in front of the app: browsers talk HTTPS to IIS, and IIS passes ea
    ```powershell
    & "$env:windir\system32\inetsrv\appcmd.exe" set config -section:system.webServer/proxy /preserveHostHeader:"True" /commit:apphost
    ```
-4. **Create the site:** make a folder `C:\inetpub\aginventory`. In IIS Manager, *Sites → Add Website*: name `AG Inventory`, physical path `C:\inetpub\aginventory`, binding **https**, port 443, your host name, and an SSL certificate (see below). Stop or remove the *Default Web Site* if you don't use it.
+4. **Create the site:** make a folder `C:\inetpub\aginventory`. In IIS Manager, *Sites → Add Website*: name `Mizan`, physical path `C:\inetpub\aginventory`, binding **https**, port 443, your host name, and an SSL certificate (see below). Stop or remove the *Default Web Site* if you don't use it.
 5. **Pass requests to the app:** save this as `C:\inetpub\aginventory\web.config`:
    ```xml
    <?xml version="1.0" encoding="UTF-8"?>

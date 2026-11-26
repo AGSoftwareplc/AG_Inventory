@@ -1,4 +1,4 @@
-# Stop AG Inventory on the server: the scheduled task and every copy of serve.py still running
+# Stop Mizan on the server: the scheduled task and every copy of serve.py still running
 # (also copies started by hand with start.bat). Start it again with:
 #     Start-ScheduledTask -TaskName 'AG Inventory'
 # Run in PowerShell as Administrator:
@@ -15,4 +15,4 @@ Get-CimInstance Win32_Process -Filter "Name='cmd.exe'" |
 $found = Get-CimInstance Win32_Process -Filter "Name='python.exe' OR Name='pythonw.exe'" |
     Where-Object { $_.CommandLine -like '*serve.py*' }
 foreach ($p in $found) { Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue }
-if (-not $Quiet) { Write-Host "AG Inventory stopped ($(@($found).Count) app process(es) ended)." }
+if (-not $Quiet) { Write-Host "Mizan stopped ($(@($found).Count) app process(es) ended)." }
