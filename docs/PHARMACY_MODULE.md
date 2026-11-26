@@ -1,7 +1,7 @@
 # Pharmacy module: SRS addendum
 
 Source: *Pharmacy Management System SRS v1.1* (owner: Abebe Getnet, 02 November 2026).
-This addendum says how that SRS is delivered as an **optional module of AG Inventory**, what is built in
+This addendum says how that SRS is delivered as an **optional module of Mizan**, what is built in
 this first release, and what is left for later phases.
 
 ## 1. Decision
@@ -10,13 +10,13 @@ The pharmacy is **not a separate system**. It is a switch per business:
 **Admin → Business profile & settings → Pharmacy module**. One codebase, one SQLite file per business,
 no Docker, same install. With the switch off, nothing changes for a normal shop.
 
-The SRS was written for ASP.NET Core and PostgreSQL (SRS 14.1). AG Inventory keeps its own stack
+The SRS was written for ASP.NET Core and PostgreSQL (SRS 14.1). Mizan keeps its own stack
 (Python, Flask, SQLite, Waitress), as approved for the shop SRS. All the rules below are enforced in
 `rules.py` and `pharmacy.py`, not in the browser.
 
-## 2. Reused from AG Inventory as it is
+## 2. Reused from Mizan as it is
 
-| SRS area | Already in AG Inventory |
+| SRS area | Already in Mizan |
 |---|---|
 | Products, categories, barcodes, units, price history (FR-001-01, 04, 07, 10, 11) | Products |
 | Suppliers, purchases, receiving, supplier returns (3.2, 3.3, 3.18) | Purchases & receiving, Return to supplier |
@@ -64,7 +64,7 @@ The SRS was written for ASP.NET Core and PostgreSQL (SRS 14.1). AG Inventory kee
 | SRS reference | Why not now |
 |---|---|
 | FR-001-15, 3.21 (VAT, TOT, withholding, fiscal device / e-invoicing) | The shop SRS decided *no VAT*. Needs a tax adviser and a fiscal device vendor first (SRS Appendix B). |
-| 3.11 integrated accounting, journals, period close (BR-018, BR-025) | Large; AG Inventory keeps profit reports and expenses. |
+| 3.11 integrated accounting, journals, period close (BR-018, BR-025) | Large; Mizan keeps profit reports and expenses. |
 | 3.22 Amharic UI, Ethiopian calendar, FR-001-20, FR-007-12 | The shop SRS decided *English only*. |
 | FR-005 payment APIs (telebirr, CBE Birr, card terminal), 3.24 SMS / email | Need provider accounts and internet; payments are recorded by method and TT number today. |
 | 3.19 cashier shifts and cash drawer | Not requested for the shop; can be added as its own step. |
