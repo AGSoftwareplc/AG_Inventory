@@ -8,7 +8,17 @@
   <div><label>Still in stock</label><b>{{ b.remaining|qty }} {{ b.unit }}</b></div>
   {% if can('reports') %}<div><label>Unit cost</label>{{ b.unit_cost|money }}</div><div><label>Value in stock</label>{{ (b.remaining*b.unit_cost)|money }}</div>{% endif %}
   <div><label>Expiry date</label>{{ b.expiry or 'not set' }}</div>
+  {% if b.batch_no %}<div><label>Batch number</label><b>{{ b.batch_no }}</b></div>{% endif %}
+  {% if b.status != 'Available' or setting('pharmacy') == '1' %}<div><label>Status</label>{% if b.status == 'Available' and not (b.expiry and b.expiry < today) %}<span class="badge ok">Available</span>{% else %}<span class="badge err">{{ 'Expired' if b.status == 'Available' else b.status }}</span>{% endif %}</div>{% endif %}
 </div>
+{% if setting('pharmacy') == '1' and can('adjust') %}<div class="card">
+{% if b.status != 'Recalled' %}<form method="post" action="{{ url_for('pharmacy.batch_status', bid=b.id) }}" class="filters" style="margin:0">{{ csrf() }}
+  <div><label>Change status</label><select name="status">{% for s in ['Available', 'Quarantined', 'Damaged'] %}<option {{ 'selected' if b.status == s }}>{{ s }}</option>{% endfor %}</select></div>
+  <div class="grow"><label>Reason *</label><input name="reason" placeholder="e.g. inspected and fine, failed temperature check"></div>
+  <div style="flex:0"><button class="light">Save status</button></div></form>
+{% else %}<p>This batch is <b>recalled</b>: it cannot be sold. Return it to the supplier or dispose of it.</p>{% endif %}
+{% if b.remaining > 0.0005 %}<div class="actions"><a class="btn light" href="{{ url_for('pharmacy.dispose', bid=b.id) }}">Dispose of this batch (with witnesses)</a></div>{% endif %}
+</div>{% endif %}
 {% if can('adjust') %}<form method="post" class="card">{{ csrf() }}<h2 style="margin-top:0">Expiry date</h2>
 <div class="grid"><div><label>Expiry date (leave empty for none)</label><input type="date" name="expiry" value="{{ b.expiry or '' }}"></div></div>
 <div class="actions"><button class="light">Save expiry date</button> {% if b.remaining > 0.0005 %}<a class="btn light" href="{{ url_for('inventory.adjust', pid=b.product_id, batch=b.id) }}">Write off from this batch</a>{% endif %}</div></form>{% endif %}

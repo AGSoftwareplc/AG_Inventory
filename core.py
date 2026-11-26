@@ -33,13 +33,20 @@ PERMS = {
     'suppliers': 'Manage suppliers',
     'expenses': 'Manage expenses',
     'reports': 'View reports, profit and dashboard figures',
+    # pharmacy module (only used when Admin -> Settings -> Pharmacy is switched on)
+    'pharmacy': 'Pharmacy: register patients, prescribers and prescriptions',
+    'dispense': 'Pharmacy: verify prescriptions and dispense prescription-only and controlled medicines '
+                '(needs a valid pharmacist licence on the user)',
 }
 ADMIN = 'Administrator'
-ROLES = [ADMIN, 'Sales Attendant', 'Inventory Manager']
+PHARMACIST = 'Pharmacist'
+ROLES = [ADMIN, 'Sales Attendant', 'Inventory Manager', PHARMACIST]
 DEFAULT_ROLE_PERMS = {
-    'Sales Attendant': ['pos', 'sales_view', 'customers', 'inventory', 'payments', 'credit'],
+    'Sales Attendant': ['pos', 'sales_view', 'customers', 'inventory', 'payments', 'credit', 'pharmacy'],
     'Inventory Manager': ['products', 'inventory', 'adjust', 'purchases', 'receive',
                           'suppliers', 'sales_view'],
+    PHARMACIST: ['pos', 'sales_view', 'customers', 'inventory', 'payments', 'credit', 'returns', 'pharmacy',
+                 'dispense'],
 }
 DEFAULT_SETTINGS = {
     'shop_name': 'My Shop',
@@ -54,7 +61,19 @@ DEFAULT_SETTINGS = {
     'receipt_footer': 'Thank you for shopping with us!',
     'allow_negative': '0',
     'last_backup': '',
+    # pharmacy module
+    'pharmacy': '0',                 # 1 = this business is a pharmacy (medicine details, prescriptions, expiry, ...)
+    'rx_valid_days': '30',           # a prescription can be dispensed this many days after it was written
+    'rx_controlled_days': '7',       # ... for narcotic / psychotropic medicines
+    'expiry_alert_days': '30,60,90', # expiry alert bands
 }
+RX_CLASSES = ['OTC', 'POM', 'Narcotic', 'Psychotropic', 'Precursor']
+RX_CLASS_LABELS = {'OTC': 'OTC (over the counter)', 'POM': 'Prescription only (POM)', 'Narcotic': 'Narcotic',
+                   'Psychotropic': 'Psychotropic', 'Precursor': 'Precursor'}
+CONTROLLED = ('Narcotic', 'Psychotropic')
+DOSAGE_FORMS = ['Tablet', 'Capsule', 'Syrup', 'Suspension', 'Injection', 'Cream', 'Ointment', 'Drops',
+                'Inhaler', 'Suppository', 'Powder', 'Medical supply', 'Other']
+STORAGE = ['15-25 °C', '2-8 °C (cold chain)', 'Frozen', 'Protect from light']
 EXPENSE_CATEGORIES = ['Rent', 'Electricity', 'Water', 'Transportation', 'Salary',
                       'Maintenance', 'Other']
 
@@ -183,6 +202,13 @@ def init_db(path, seed_starters=True, backup_dir=None):
         # selling on credit became its own permission: roles that could sell keep that right
         con.execute("INSERT OR IGNORE INTO role_permissions SELECT role, 'credit' FROM role_permissions WHERE perm='pos'")
         con.execute("INSERT INTO settings(key, value) VALUES ('credit_perm_added', '1')")
+    if not con.execute("SELECT 1 FROM settings WHERE key='pharmacy_perms_added'").fetchone():
+        # pharmacy module: the Pharmacist role, and cashiers may register prescriptions
+        for role in (PHARMACIST, 'Sales Attendant'):
+            con.executemany('INSERT OR IGNORE INTO role_permissions VALUES (?, ?)',
+                            [(role, p) for p in DEFAULT_ROLE_PERMS[role]] if role == PHARMACIST
+                            else [(role, 'pharmacy')])
+        con.execute("INSERT INTO settings(key, value) VALUES ('pharmacy_perms_added', '1')")
     open_batches(con, path, backup_dir)
     if seed_starters:
         seed_users(con)
@@ -252,6 +278,13 @@ MIGRATIONS = [
     ('sales', 'no_stock', 'INTEGER NOT NULL DEFAULT 0'),   # 1 = stock was already taken out before recording
     ('sales', 'notes', "TEXT NOT NULL DEFAULT ''"),
     ('returns', 'return_id', 'INTEGER'),            # purchase return document (purchase_returns)
+    # pharmacy module: batch numbers and batch status, pharmacist licence, sale from a prescription
+    ('stock_batches', 'batch_no', "TEXT NOT NULL DEFAULT ''"),
+    ('stock_batches', 'status', "TEXT NOT NULL DEFAULT 'Available'"),  # Available, Quarantined, Damaged, Recalled
+    ('purchase_items', 'batch_no', "TEXT NOT NULL DEFAULT ''"),
+    ('users', 'licence_no', "TEXT NOT NULL DEFAULT ''"),
+    ('users', 'licence_expiry', 'TEXT'),
+    ('sales', 'prescription_id', 'INTEGER'),
 ]
 DEFAULT_PASSWORD = '123456'   # what "Reset to default password" sets; the user must change it at next login
 
@@ -429,6 +462,11 @@ def setting(key):
     if 'settings' not in g:
         g.settings = {r['key']: r['value'] for r in get_db().execute('SELECT * FROM settings')}
     return g.settings.get(key, DEFAULT_SETTINGS.get(key, ''))
+
+
+def pharmacy_on():
+    """True when this business uses the pharmacy module."""
+    return setting('pharmacy') == '1'
 
 
 def units(current=None):

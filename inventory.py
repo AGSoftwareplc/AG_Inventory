@@ -112,8 +112,8 @@ def batches():
         sql += " AND b.expiry IS NOT NULL AND b.expiry<>'' AND b.expiry<=?"
         args.append((date.today() + timedelta(days=days)).isoformat())
     if q:
-        sql += ' AND (p.name LIKE ? OR p.code LIKE ? OR b.ref_no LIKE ?)'
-        args += [f'%{q}%', f'%{q}%', f'%{q}%']
+        sql += ' AND (p.name LIKE ? OR p.code LIKE ? OR b.ref_no LIKE ? OR b.batch_no LIKE ?)'
+        args += [f'%{q}%', f'%{q}%', f'%{q}%', f'%{q}%']
     sql += (" ORDER BY p.name, CASE WHEN b.expiry IS NULL OR b.expiry='' THEN 1 ELSE 0 END, b.expiry, "
             "b.received, b.id LIMIT 3000")
     rows = get_db().execute(sql, args).fetchall()
@@ -141,7 +141,7 @@ def batch(bid):
     moves = db.execute('SELECT bm.*, m.at, m.move_type, m.ref_no, m.ref_type, m.ref_id, m.reason, u.username '
                        'FROM batch_moves bm JOIN stock_moves m ON m.id=bm.move_id LEFT JOIN users u ON u.id=m.user_id '
                        'WHERE bm.batch_id=? ORDER BY bm.id', (bid,)).fetchall()
-    return render_template('inventory/batch.html', b=b, moves=moves, labels=rules.MOVE_LABELS)
+    return render_template('inventory/batch.html', b=b, moves=moves, labels=rules.MOVE_LABELS, today=today())
 
 
 # ---------------------------------------------------------------- stocktake

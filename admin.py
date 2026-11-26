@@ -41,6 +41,9 @@ def user_edit(uid=None):
                 raise RuleError('You cannot remove your own administrator access.')
             if core.username_taken(username, g.business['id']):  # usernames are unique across businesses
                 raise RuleError('This username is already taken.')
+            lic = (f.get('licence_no', '').strip(), f.get('licence_expiry', '').strip() or None)
+            if lic[0] and not lic[1]:
+                raise RuleError('Enter the expiry date of the pharmacist licence.')
             branch_ids = [int(b) for b in f.getlist('branch') if b.isdigit()]
             if role != ADMIN and not branch_ids:
                 open_ids = [r['id'] for r in db.execute('SELECT id FROM branches WHERE active=1')]
@@ -51,6 +54,7 @@ def user_edit(uid=None):
                 if u:
                     db.execute('UPDATE users SET username=?, full_name=?, role=?, active=? WHERE id=?',
                                (username, name, role, active, uid))
+                    db.execute('UPDATE users SET licence_no=?, licence_expiry=? WHERE id=?', lic + (uid,))
                     if pw:
                         db.execute('UPDATE users SET password_hash=? WHERE id=?',
                                    (generate_password_hash(pw), uid))
@@ -58,6 +62,7 @@ def user_edit(uid=None):
                     uid = db.execute('INSERT INTO users(username, full_name, password_hash, role, active) '
                                      'VALUES (?,?,?,?,?)', (username, name, generate_password_hash(pw),
                                                             role, active)).lastrowid
+                    db.execute('UPDATE users SET licence_no=?, licence_expiry=? WHERE id=?', lic + (uid,))
                 db.execute('DELETE FROM user_branches WHERE user_id=?', (uid,))
                 for b in (branch_ids or [1]):
                     db.execute('INSERT OR IGNORE INTO user_branches(user_id, branch_id) SELECT ?, id FROM branches '
@@ -177,8 +182,12 @@ def settings():
                 if k in ('last_backup', 'logo_file'):
                     continue
                 v = request.form.get(k, '')
-                if k == 'allow_negative':
+                if k in ('allow_negative', 'pharmacy'):
                     v = '1' if v else '0'
+                elif k in ('rx_valid_days', 'rx_controlled_days') and not v.strip().isdigit():
+                    v = DEFAULT_SETTINGS[k]
+                elif k == 'expiry_alert_days' and not any(x.strip().isdigit() for x in v.split(',')):
+                    v = DEFAULT_SETTINGS[k]
                 db.execute('UPDATE settings SET value=? WHERE key=?', (v.strip(), k))
             audit('settings_change', '', db)
             if logo and logo.filename:

@@ -1,0 +1,19 @@
+{% extends 'base.html' %}{% block title %}Controlled register{% endblock %}
+{% block content %}{% include 'pharmacy/_tabs.html' %}
+<h1>Controlled-medicine register{% if med %}: {{ med.name }} <span class="muted">{{ med.strength }} · {{ med.rx_class }}</span>{% endif %}</h1>
+<p class="muted">Narcotic and psychotropic medicines. Entries come from the stock movements and cannot be edited: a correction is a new, reversing entry. Print it for the periodic report; check the balance against the shelf at least weekly (Stocktake).</p>
+<form class="filters">
+  <div class="grow"><label>Medicine</label><select name="pid">{% for m in meds %}<option value="{{ m.id }}" {{ 'selected' if m.id == pid }}>{{ m.name }} ({{ m.rx_class }})</option>{% else %}<option value="">No narcotic or psychotropic medicines registered</option>{% endfor %}</select></div>
+  <div><label>From</label><input type="date" name="start" value="{{ start }}"></div><div><label>To</label><input type="date" name="end" value="{{ end }}"></div>
+  <div style="flex:0"><button>Show</button></div><div style="flex:0"><button type="button" class="light" onclick="window.print()">Print</button></div></form>
+{% if med %}<div class="card tablewrap" style="padding:0"><table>
+<tr><th>Date</th><th>Entry</th><th>Document</th><th class="n">In</th><th class="n">Out</th><th class="n">Balance</th><th>Patient</th><th>Prescriber</th><th>Pharmacist / checked by</th><th>Recorded by</th></tr>
+<tr class="total"><td>{{ start }}</td><td colspan="4">Opening balance</td><td class="n">{{ opening|qty }}</td><td colspan="4"></td></tr>
+{% for m in rows %}<tr><td>{{ m.at }}</td><td>{{ labels.get(m.move_type, m.move_type) }}{% if m.reason %}<br><span class="muted">{{ m.reason }}</span>{% endif %}</td>
+<td>{{ m.ref_no }}{% if m.rx_ref %}<br><span class="muted">{{ m.rx_ref }} {{ m.form_serial }}</span>{% endif %}</td>
+<td class="n">{{ m.qty|qty if m.qty > 0 }}</td><td class="n">{{ (-m.qty)|qty if m.qty < 0 }}</td><td class="n"><b>{{ m.balance|qty }}</b></td>
+<td>{{ m.patient or '' }}</td><td>{{ m.prescriber or '' }}</td><td>{{ m.pharmacist or '' }}{{ ' / ' ~ m.checker if m.checker }}</td><td>{{ m.by_user or '' }}</td></tr>
+{% else %}<tr><td colspan="10" class="muted">No entries in this period.</td></tr>{% endfor %}
+<tr class="total"><td>{{ end }}</td><td colspan="4">Closing balance</td><td class="n">{{ (rows[-1].balance if rows else opening)|qty }} {{ med.unit }}</td><td colspan="4"></td></tr>
+</table></div>{% endif %}
+{% endblock %}

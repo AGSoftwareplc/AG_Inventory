@@ -14,6 +14,7 @@ MOVE_LABELS = {
     'stocktake': 'Stocktake correction', 'opening': 'Opening stock',
     'transfer_out': 'Transfer sent', 'transfer_in': 'Transfer received',
     'transfer_cancel': 'Transfer cancelled', 'batch_open': 'Opening batch (FIFO start)',
+    'disposal': 'Disposal (destroyed)',
 }
 
 
@@ -38,6 +39,52 @@ FIFO_ORDER = "ORDER BY CASE WHEN expiry IS NULL OR expiry='' THEN 1 ELSE 0 END, 
 def open_batches(db, pid, branch):
     return db.execute('SELECT * FROM stock_batches WHERE product_id=? AND branch_id=? AND remaining>0.0005 '
                       + FIFO_ORDER, (pid, branch)).fetchall()
+
+
+# ---------------------------------------------------------------- pharmacy module
+# With Admin -> Settings -> Pharmacy on, a sale only takes stock from batches that may be sold:
+# status Available and not past their expiry date (expired = from the day after the expiry date).
+# The order is FEFO: the batch that expires first goes first.
+SELLABLE = "status='Available' AND (expiry IS NULL OR expiry='' OR expiry>=?)"
+
+
+def pharmacy():
+    return setting('pharmacy') == '1'
+
+
+def sellable_batches(db, pid, branch):
+    return db.execute('SELECT * FROM stock_batches WHERE product_id=? AND branch_id=? AND remaining>0.0005 AND '
+                      + SELLABLE + ' ' + FIFO_ORDER, (pid, branch, today())).fetchall()
+
+
+def medicine(db, pid):
+    """The medicine details of a product, or None for general goods."""
+    return db.execute('SELECT * FROM medicines WHERE product_id=?', (pid,)).fetchone()
+
+
+def check_registration(m, p, what='sold'):
+    """Medicines with an expired EFDA registration may not be bought or sold (BR-026)."""
+    if m and m['reg_expiry'] and m['reg_expiry'] < today():
+        raise RuleError(f"{p['name']}: its EFDA registration expired on {m['reg_expiry']}, so it cannot be {what}. "
+                        f"Update the registration on the product first.")
+
+
+def _quarantine_return(db, mid):
+    """Medicines a customer brings back are kept apart (Quarantined) until a pharmacist inspects them (BR-013).
+    The returned quantity is split off its original batch into a new batch with the same details."""
+    for bm in db.execute('SELECT bm.batch_id, bm.qty AS mqty, bm.unit_cost, b.product_id, b.branch_id, b.ref_id, '
+                         'b.ref_no, b.received, b.expiry, b.batch_no FROM batch_moves bm JOIN stock_batches b '
+                         'ON b.id=bm.batch_id WHERE bm.move_id=? AND bm.qty>0', (mid,)).fetchall():
+        q = bm['mqty']
+        db.execute('UPDATE stock_batches SET remaining=ROUND(remaining-?, 3) WHERE id=?', (q, bm['batch_id']))
+        db.execute('INSERT INTO batch_moves(batch_id, move_id, qty, unit_cost) VALUES (?,?,?,?)',
+                   (bm['batch_id'], mid, -q, bm['unit_cost']))
+        nid = db.execute("INSERT INTO stock_batches(product_id, branch_id, source, ref_id, ref_no, received, expiry, qty, "
+                         "remaining, unit_cost, batch_no, status) VALUES (?,?,'sale_return',?,?,?,?,?,?,?,?,'Quarantined')",
+                         (bm['product_id'], bm['branch_id'], bm['ref_id'], bm['ref_no'], bm['received'], bm['expiry'],
+                          q, q, bm['unit_cost'], bm['batch_no'])).lastrowid
+        db.execute('INSERT INTO batch_moves(batch_id, move_id, qty, unit_cost) VALUES (?,?,?,?)',
+                   (nid, mid, q, bm['unit_cost']))
 
 
 def _take(db, mid, batches, need):
@@ -80,10 +127,12 @@ def _restore(db, mid, out_moves, need):
     return used
 
 
-def _new_batch(db, mid, pid, branch, qty, cost, source, ref_id, ref_no, received, expiry=None, item=None):
+def _new_batch(db, mid, pid, branch, qty, cost, source, ref_id, ref_no, received, expiry=None, item=None,
+               batch_no='', status='Available'):
     bid = db.execute('INSERT INTO stock_batches(product_id, branch_id, source, ref_id, ref_no, purchase_item_id, '
-                     'received, expiry, qty, remaining, unit_cost) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
-                     (pid, branch, source, ref_id, ref_no, item, received, expiry or None, qty, qty, cost)).lastrowid
+                     'received, expiry, qty, remaining, unit_cost, batch_no, status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                     (pid, branch, source, ref_id, ref_no, item, received, expiry or None, qty, qty, cost,
+                      (batch_no or '').strip(), status or 'Available')).lastrowid
     db.execute('INSERT INTO batch_moves(batch_id, move_id, qty, unit_cost) VALUES (?,?,?,?)', (bid, mid, qty, cost))
     return bid
 
@@ -210,14 +259,15 @@ def serials_back(db, rows, uid, event, branch, ref_type='', ref_id=None, ref_no=
 # ---------------------------------------------------------------- core stock movement
 def move_stock(db, pid, qty, move_type, uid, ref_type='', ref_id=None, ref_no='', reason='',
                in_cost=None, branch=None, batches=None, restore=None, layers=None, expiry=None,
-               purchase_item=None, received=None):
+               purchase_item=None, received=None, batch_no=''):
     """Change stock of one product at one branch (default: the user's branch) and record the movement.
 
     Stock going out (qty < 0) is taken from the FIFO batches (or only from `batches`, if given) and
     its unit cost is the cost of the batches it came from.
     Stock coming in (qty > 0):
       restore = ids of earlier outgoing movements: it goes back into those same batches (returns, cancels);
-      layers = [(qty, cost, received, expiry)]: new batches like these (transfers keep the original batches);
+      layers = [(qty, cost, received, expiry[, batch_no, status])]: new batches like these (transfers keep
+               the original batches);
       otherwise one new batch at in_cost (default: the current average cost).
     The average cost kept on the product is the value of its open batches divided by their quantity.
     """
@@ -235,7 +285,16 @@ def move_stock(db, pid, qty, move_type, uid, ref_type='', ref_id=None, ref_no=''
     day = received or today()
     if qty < 0:
         need = -qty
-        pool = batches if batches is not None else open_batches(db, pid, branch)
+        if batches is not None:
+            pool = batches
+        elif move_type == 'sale' and pharmacy():  # never sell expired, recalled or quarantined stock
+            pool = sellable_batches(db, pid, branch)
+            ok = _q(sum(b['remaining'] for b in pool))
+            if ok < need - EPS:
+                raise RuleError(f"{p['name']}: only {fmt_qty(ok)} {p['unit']} can be sold. The rest of the stock is "
+                                f"expired, recalled, quarantined or damaged (Pharmacy → Expiry & batches).")
+        else:
+            pool = open_batches(db, pid, branch)
         used = _take(db, mid, pool, need)
         short = _q(need - sum(u[0] for u in used))
         if short > EPS:
@@ -249,16 +308,19 @@ def move_stock(db, pid, qty, move_type, uid, ref_type='', ref_id=None, ref_no=''
         add = _q(max(0.0, new_stock) - max(0.0, old_stock))
         used = _restore(db, mid, restore, add) if restore else []
         left = _q(add - sum(u[0] for u in used))
-        for lq, lc, lr, le in (layers or []):
+        for layer in (layers or []):
+            lq, lc, lr, le = layer[:4]
             if left <= EPS:
                 break
             q = _q(min(lq, left))
-            _new_batch(db, mid, pid, branch, q, lc, move_type, ref_id, ref_no, lr or day, le)
+            _new_batch(db, mid, pid, branch, q, lc, move_type, ref_id, ref_no, lr or day, le, None,
+                       *(tuple(layer[4:6])))
             used.append((q, lc))
             left = _q(left - q)
         if left > EPS:
             cost = in_cost if in_cost is not None else (_avg(used) if used else avg)
-            _new_batch(db, mid, pid, branch, left, cost, move_type, ref_id, ref_no, day, expiry, purchase_item)
+            _new_batch(db, mid, pid, branch, left, cost, move_type, ref_id, ref_no, day, expiry, purchase_item,
+                       batch_no)
             used.append((left, cost))
         unit_cost = _avg(used)
         if unit_cost is None:
@@ -319,7 +381,7 @@ def adjust_stock(db, pid, kind, qty, reason, uid, batch_id=None, serials=None):
         if qty < 0:
             kw['batches'] = [b]
         else:  # found again: a batch like that one (same cost and dates)
-            kw['layers'] = [(qty, b['unit_cost'], b['received'], b['expiry'])]
+            kw['layers'] = [(qty, b['unit_cost'], b['received'], b['expiry'], b['batch_no'], b['status'])]
             kw['in_cost'] = b['unit_cost']
     p = product(db, pid)
     serials = parse_serials(serials)
@@ -353,13 +415,14 @@ def net_unit_cost(item, purchase, gross):
 
 def save_purchase(db, pur_id, supplier_id, date, discount, notes, lines, uid):
     """Create or update a Draft purchase.
-    lines = [(product_id, qty, unit_cost_cents)] or [(product_id, qty, unit_cost_cents, expiry, serials_text)]."""
+    lines = [(product_id, qty, unit_cost_cents)] or
+            [(product_id, qty, unit_cost_cents, expiry, serials_text[, batch_no])]."""
     if not lines:
         raise RuleError('Add at least one product line.')
     if not db.execute('SELECT 1 FROM suppliers WHERE id=?', (supplier_id,)).fetchone():
         raise RuleError('Choose a supplier.')
-    lines = [tuple(l) + (None, '')[len(l) - 3:] for l in lines]
-    gross = sum(rnd(q * c) for _, q, c, _e, _s in lines)
+    lines = [tuple(l) + (None, '', '')[len(l) - 3:] for l in lines]
+    gross = sum(rnd(q * c) for _, q, c, _e, _s, _b in lines)
     if discount > gross:
         raise RuleError('Discount cannot be larger than the purchase value.')
     total = gross - discount
@@ -376,13 +439,13 @@ def save_purchase(db, pur_id, supplier_id, date, discount, notes, lines, uid):
                          'user_id, branch_id) VALUES (?,?,?,?,?,?,?,?)',
                          (ref, supplier_id, date, discount, total, notes, uid, branch_id()))
         pur_id = cur.lastrowid
-    for pid, q, c, exp, sers in lines:
+    for pid, q, c, exp, sers, bno in lines:
         p = product(db, pid)
         sers = parse_serials(sers)
         if p['serial_tracked']:
             _whole(p, q)
-        db.execute('INSERT INTO purchase_items(purchase_id, product_id, qty, unit_cost, expiry, serials) '
-                   'VALUES (?,?,?,?,?,?)', (pur_id, pid, q, c, exp or None, '\n'.join(sers)))
+        db.execute('INSERT INTO purchase_items(purchase_id, product_id, qty, unit_cost, expiry, serials, batch_no) '
+                   'VALUES (?,?,?,?,?,?,?)', (pur_id, pid, q, c, exp or None, '\n'.join(sers), (bno or '').strip()))
     return pur_id
 
 
@@ -403,7 +466,7 @@ def confirm_purchase(db, pur_id, uid):
     items = db.execute('SELECT * FROM purchase_items WHERE purchase_id=?', (pur_id,)).fetchall()
     receive_purchase(db, pur_id, {i['id']: i['qty'] for i in items}, uid,
                      {i['id']: i['expiry'] for i in items if i['expiry']},
-                     {i['id']: i['serials'] for i in items})
+                     {i['id']: i['serials'] for i in items}, {i['id']: i['batch_no'] for i in items})
     audit('purchase_confirm', pur['ref_no'], db)
 
 
@@ -431,12 +494,12 @@ def _refresh_purchase_status(db, pur_id):
     db.execute('UPDATE purchases SET status=? WHERE id=?', (status, pur_id))
 
 
-def receive_purchase(db, pur_id, receipts, uid, expiries=None, serials=None):
+def receive_purchase(db, pur_id, receipts, uid, expiries=None, serials=None, batch_nos=None):
     """receipts = {item_id: qty_received_now}; expiries = {item_id: 'YYYY-MM-DD'} (optional);
     serials = {item_id: serial numbers} (needed for serial-numbered products).
     Each line received becomes a new FIFO batch at the net unit cost.
     Used by confirm_purchase, and for older purchases that were confirmed before receiving was automatic."""
-    expiries, serials = expiries or {}, serials or {}
+    expiries, serials, batch_nos = expiries or {}, serials or {}, batch_nos or {}
     pur = _purchase(db, pur_id)
     if pur['status'] not in ('Confirmed', 'Partially Received'):
         raise RuleError('Only confirmed purchases can be received.')
@@ -454,6 +517,14 @@ def receive_purchase(db, pur_id, receipts, uid, expiries=None, serials=None):
             p = product(db, it['product_id'])
             raise RuleError(f"{p['name']}: only {fmt_qty(left)} left to receive.")
         p = product(db, it['product_id'], pur['branch_id'])
+        med = medicine(db, p['id']) if pharmacy() else None
+        if med:  # every batch of a medicine has a batch number and an expiry date (BR-003)
+            check_registration(med, p, 'purchased')
+            if not (batch_nos.get(item_id) or '').strip() or not expiries.get(item_id):
+                raise RuleError(f"{p['name']}: enter the batch number and the expiry date of this medicine.")
+            if expiries[item_id] < today():
+                raise RuleError(f"{p['name']}: batch {batch_nos[item_id]} expired on {expiries[item_id]}. "
+                                f"Expired medicines cannot be received.")
         sers = parse_serials(serials.get(item_id))
         if p['serial_tracked']:
             _whole(p, q)
@@ -463,7 +534,7 @@ def receive_purchase(db, pur_id, receipts, uid, expiries=None, serials=None):
         db.execute('UPDATE purchase_items SET received_qty=received_qty+? WHERE id=?', (q, item_id))
         m = move_stock(db, it['product_id'], q, 'purchase', uid, 'purchase', pur_id, pur['ref_no'],
                        in_cost=net_unit_cost(it, pur, gross), branch=pur['branch_id'],
-                       expiry=expiries.get(item_id), purchase_item=item_id)
+                       expiry=expiries.get(item_id), purchase_item=item_id, batch_no=batch_nos.get(item_id) or '')
         if p['serial_tracked']:
             bid = db.execute('SELECT batch_id FROM batch_moves WHERE move_id=? ORDER BY id DESC', (m.id,)).fetchone()
             register_serials(db, p, sers, uid, 'Purchased', pur['branch_id'], 'purchase', pur_id, pur['ref_no'],
@@ -556,7 +627,7 @@ def payment_status(total, paid):
 # ---------------------------------------------------------------- sales
 def create_sale(db, lines, discount, tendered, method, customer_id, uid, date,
                 allow_discount=False, allow_credit=True, reference='', allow_price=False,
-                manual=False, seller_id=None, deduct=True, notes=''):
+                manual=False, seller_id=None, deduct=True, notes='', prescription=None):
     """lines = [(product_id, qty)] or [(product_id, qty, price_cents_or_None, serials)].
     Default prices and costs come from the database, not the browser. A different price is only taken
     from users allowed to change prices; the default price is kept beside it so the difference is known.
@@ -565,7 +636,10 @@ def create_sale(db, lines, discount, tendered, method, customer_id, uid, date,
     The cost of each line is the cost of the FIFO batches it was taken from.
 
     manual = a sale made outside the app, recorded later: seller_id is the actual seller, uid the user who
-    records it. deduct=False when the stock was already taken out (no second deduction)."""
+    records it. deduct=False when the stock was already taken out (no second deduction).
+
+    Pharmacy module: prescription-only and controlled medicines are only sold through a verified prescription
+    (prescription = {'id': prescription id, 'products': {product ids on it}}, set by pharmacy.py)."""
     if not lines:
         raise RuleError('The cart is empty.')
     merged = {}
@@ -595,6 +669,13 @@ def create_sale(db, lines, discount, tendered, method, customer_id, uid, date,
         p = product(db, pid)
         if not p['active']:
             raise RuleError(f"{p['name']} is not active.")
+        med = medicine(db, pid) if pharmacy() else None
+        if med:
+            check_registration(med, p)
+            if med['rx_class'] != 'OTC' and not (prescription and pid in prescription['products']):
+                raise RuleError(f"{p['name']} is {'a controlled medicine' if med['rx_class'] in ('Narcotic', 'Psychotropic') else 'prescription-only'} "
+                                f"({med['rx_class']}): it can only be sold from a verified prescription "
+                                f"(Pharmacy → Prescriptions).")
         need[pid] = _q(need.get(pid, 0) + q)
         if deduct and need[pid] > p['stock'] + EPS and setting('allow_negative') != '1':
             raise RuleError(f"Not enough stock for {p['name']}: available {fmt_qty(p['stock'])} "
@@ -621,10 +702,11 @@ def create_sale(db, lines, discount, tendered, method, customer_id, uid, date,
     change = max(0, tendered - total)
     receipt = next_no(db, 'M' if manual else 'S', 'sales', 'receipt_no')
     sid = db.execute('INSERT INTO sales(receipt_no, customer_id, date, subtotal, discount, total, paid, tendered, '
-                     'change_due, method, user_id, branch_id, manual, entered_by, no_stock, notes) '
-                     'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                     'change_due, method, user_id, branch_id, manual, entered_by, no_stock, notes, prescription_id) '
+                     'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                      (receipt, customer_id, date, subtotal, discount, total, paid, tendered, change, method,
-                      seller, branch_id(), 1 if manual else 0, uid, 0 if deduct else 1, (notes or '').strip())).lastrowid
+                      seller, branch_id(), 1 if manual else 0, uid, 0 if deduct else 1, (notes or '').strip(),
+                      prescription['id'] if prescription else None)).lastrowid
     for p, q, price, changed, sers in items:
         iid = db.execute('INSERT INTO sale_items(sale_id, product_id, qty, price, cost, default_price, price_by) '
                          'VALUES (?,?,?,?,0,?,?)', (sid, p['id'], q, price, p['price'],
@@ -692,6 +774,8 @@ def sale_return(db, sid, item_id, qty, reason, uid, date, serials=None):
     m = move_stock(db, it['product_id'], qty, 'sale_return', uid, 'sale', sid, s['receipt_no'],
                    reason=reason.strip(), in_cost=it['cost'], branch=s['branch_id'],
                    restore=doc_moves(db, 'sale', sid, it['product_id'], 'sale'))
+    if pharmacy() and medicine(db, it['product_id']):
+        _quarantine_return(db, m.id)
     serials_back(db, back, uid, 'Customer return', s['branch_id'], 'sale', sid, s['receipt_no'])
     db.execute('UPDATE sale_items SET returned_qty=returned_qty+? WHERE id=?', (qty, item_id))
     db.execute('UPDATE sales SET refunded=refunded+? WHERE id=?', (refund, sid))
@@ -837,13 +921,15 @@ def receive_transfer(db, tid, received, uid):
         serials_back(db, moving, uid, 'Transfer received', t['to_branch'], 'transfer', tid, t['ref_no'])
         if q > EPS:
             # the receiving branch gets the same batches (cost, received and expiry dates) that left
-            out = db.execute('SELECT bm.qty, bm.unit_cost, b.received, b.expiry FROM batch_moves bm JOIN stock_batches b '
+            out = db.execute('SELECT bm.qty, bm.unit_cost, b.received, b.expiry, b.batch_no, b.status FROM batch_moves bm '
+                             'JOIN stock_batches b '
                              'ON b.id=bm.batch_id JOIN stock_moves m ON m.id=bm.move_id WHERE m.ref_type=\'transfer\' '
                              'AND m.ref_id=? AND m.product_id=? AND m.move_type=\'transfer_out\' AND bm.qty<0 ORDER BY bm.id',
                              (tid, it['product_id'])).fetchall()
             move_stock(db, it['product_id'], q, 'transfer_in', uid, 'transfer', tid, t['ref_no'],
                        in_cost=it['unit_cost'], branch=t['to_branch'],
-                       layers=[(-o['qty'], o['unit_cost'], o['received'], o['expiry']) for o in out])
+                       layers=[(-o['qty'], o['unit_cost'], o['received'], o['expiry'], o['batch_no'], o['status'])
+                               for o in out])
         if it['qty'] - q > EPS:
             lost.append(f"product {it['product_id']} {fmt_qty(it['qty'] - q)}")
         db.execute('UPDATE transfer_items SET received_qty=? WHERE id=?', (q, it['id']))

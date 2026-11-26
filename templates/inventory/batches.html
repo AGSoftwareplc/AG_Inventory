@@ -12,7 +12,7 @@
 <tr><th>Product</th><th>Batch</th><th>From</th><th>Received</th><th>Expiry</th><th class="n">Qty in</th><th class="n">In stock</th>{% if can('reports') %}<th class="n">Unit cost</th><th class="n">Value</th>{% endif %}</tr>
 {% for b in rows %}{% set expired = b.expiry and b.expiry < today %}
 <tr class="{{ 'low' if expired }}"><td><a href="{{ url_for('products.view', pid=b.product_id) }}">{{ b.name }}</a> <span class="muted">{{ b.code }}</span></td>
-<td><a href="{{ url_for('inventory.batch', bid=b.id) }}">#{{ b.id }}</a></td><td>{{ b.ref_no }}</td><td>{{ b.received }}</td>
+<td><a href="{{ url_for('inventory.batch', bid=b.id) }}">#{{ b.id }}</a> {{ b.batch_no }}{% if b.status != 'Available' %} <span class="badge err">{{ b.status }}</span>{% endif %}</td><td>{{ b.ref_no }}</td><td>{{ b.received }}</td>
 <td>{{ b.expiry or '' }}{% if expired %} <span class="badge err">expired</span>{% endif %}</td>
 <td class="n">{{ b.qty|qty }} {{ b.unit }}</td><td class="n">{{ b.remaining|qty }}</td>
 {% if can('reports') %}<td class="n">{{ b.unit_cost|money }}</td><td class="n">{{ (b.remaining*b.unit_cost)|money }}</td>{% endif %}</tr>

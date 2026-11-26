@@ -37,11 +37,12 @@ def _lines(form):
     n = len(pids)
     exps = (form.getlist('expiry') + [''] * n)[:n]
     sers = (form.getlist('serials') + [''] * n)[:n]
+    bnos = (form.getlist('batch_no') + [''] * n)[:n]
     lines = []
-    for pid, q, c, x, sn in zip(pids, qtys, costs, exps, sers):
+    for pid, q, c, x, sn, bn in zip(pids, qtys, costs, exps, sers, bnos):
         if not pid:
             continue
-        lines.append((int(pid), parse_qty(q), parse_money(c, 'Unit cost'), x.strip() or None, sn))
+        lines.append((int(pid), parse_qty(q), parse_money(c, 'Unit cost'), x.strip() or None, sn, bn.strip()))
     return lines
 
 
@@ -70,12 +71,13 @@ def edit(pur_id=None):
         except RuleError as e:
             flash(str(e), 'error')
     items = db.execute('SELECT * FROM purchase_items WHERE purchase_id=?', (pur_id,)).fetchall() if pur else []
-    products = db.execute('SELECT id, code, name, unit, avg_cost, serial_tracked FROM pv WHERE active=1 '
+    products = db.execute('SELECT pv.id, code, name, unit, avg_cost, serial_tracked, m.product_id IS NOT NULL AS med, '
+                          'm.storage FROM pv LEFT JOIN medicines m ON m.product_id=pv.id WHERE active=1 '
                           'ORDER BY name').fetchall()
     sups = db.execute('SELECT id, name FROM suppliers WHERE active=1 ORDER BY name').fetchall()
     from core import money_input, fmt_qty
     existing = [[i['product_id'], fmt_qty(i['qty']).replace(',', ''), money_input(i['unit_cost']), i['expiry'] or '',
-                 i['serials']] for i in items]
+                 i['serials'], i['batch_no']] for i in items]
     return render_template('purchases/edit.html', pur=pur, items=items, products=products, sups=sups,
                            today=today(), existing=existing)
 
@@ -147,9 +149,10 @@ def receive(pur_id):
                for k, v in request.form.items() if k.startswith('r_') and v.strip()}
         exp = {int(k[2:]): v.strip() for k, v in request.form.items() if k.startswith('x_') and v.strip()}
         sers = {int(k[2:]): v for k, v in request.form.items() if k.startswith('s_')}
+        bnos = {int(k[2:]): v.strip() for k, v in request.form.items() if k.startswith('b_') and v.strip()}
     except RuleError as e:
         return fail(e, 'purchases.view', pur_id=pur_id)
-    return _act(pur_id, lambda db: rules.receive_purchase(db, pur_id, got, g.user['id'], exp, sers),
+    return _act(pur_id, lambda db: rules.receive_purchase(db, pur_id, got, g.user['id'], exp, sers, bnos),
                 'Received into stock. Each line is now a stock batch (FIFO).')
 
 

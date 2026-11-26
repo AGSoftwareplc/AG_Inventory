@@ -331,3 +331,127 @@ CREATE TABLE IF NOT EXISTS purchase_returns (
   branch_id INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
+
+-- ---------------------------------------------------------------- pharmacy module (optional)
+-- Used only when a business switches on Admin -> Settings -> Pharmacy. A product with a medicines
+-- row is a medicine; products without one are general goods (medical supplies, cosmetics, ...).
+CREATE TABLE IF NOT EXISTS medicines (
+  product_id INTEGER PRIMARY KEY REFERENCES products(id),
+  generic_name TEXT NOT NULL DEFAULT '',
+  brand TEXT NOT NULL DEFAULT '',
+  manufacturer TEXT NOT NULL DEFAULT '',
+  dosage_form TEXT NOT NULL DEFAULT '',     -- Tablet, Capsule, Syrup, Injection, Cream, Drops, ...
+  strength TEXT NOT NULL DEFAULT '',        -- e.g. 500 mg, 250 mg/5 ml
+  rx_class TEXT NOT NULL DEFAULT 'OTC',     -- OTC, POM, Narcotic, Psychotropic, Precursor
+  storage TEXT NOT NULL DEFAULT '15-25 °C', -- 15-25 °C, 2-8 °C (cold chain), Frozen, Protect from light
+  reg_no TEXT NOT NULL DEFAULT '',          -- EFDA registration (market authorization) number
+  reg_expiry TEXT                           -- registration expiry date
+);
+
+CREATE TABLE IF NOT EXISTS patients (       -- the person a medicine is for (not always the paying customer)
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  phone TEXT NOT NULL DEFAULT '',
+  birth_date TEXT,                          -- or the age typed (stored as an estimated birth year)
+  sex TEXT NOT NULL DEFAULT '',
+  weight_kg REAL,                           -- required under 12 years
+  allergies TEXT NOT NULL DEFAULT '',       -- comma separated medicines / ingredients
+  pregnancy TEXT NOT NULL DEFAULT '',       -- '', Pregnant, Breastfeeding
+  conditions TEXT NOT NULL DEFAULT '',      -- chronic conditions
+  customer_id INTEGER REFERENCES customers(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+
+CREATE TABLE IF NOT EXISTS prescribers (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  profession TEXT NOT NULL DEFAULT '',
+  licence_no TEXT NOT NULL DEFAULT '',
+  facility TEXT NOT NULL DEFAULT '',
+  phone TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS prescriptions (
+  id INTEGER PRIMARY KEY,
+  ref_no TEXT NOT NULL UNIQUE,              -- our number, e.g. MAIN-RX-000012
+  rx_no TEXT NOT NULL DEFAULT '',           -- number written on the prescription paper
+  form_serial TEXT NOT NULL DEFAULT '',     -- serial of the EFDA form (controlled medicines)
+  date TEXT NOT NULL,                       -- date the prescriber issued it
+  patient_id INTEGER NOT NULL REFERENCES patients(id),
+  prescriber_id INTEGER NOT NULL REFERENCES prescribers(id),
+  status TEXT NOT NULL DEFAULT 'Registered', -- Registered, Verified, Rejected, Partially dispensed, Dispensed, Cancelled
+  scan_file TEXT NOT NULL DEFAULT '',       -- uploaded scan / photo of the paper
+  notes TEXT NOT NULL DEFAULT '',
+  verified_by INTEGER REFERENCES users(id),
+  verified_at TEXT,
+  interventions TEXT NOT NULL DEFAULT '',   -- warnings the pharmacist accepted, with the reason
+  counselling TEXT NOT NULL DEFAULT '',
+  reject_reason TEXT NOT NULL DEFAULT '',
+  user_id INTEGER REFERENCES users(id),
+  branch_id INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+CREATE INDEX IF NOT EXISTS ix_rx_patient ON prescriptions(patient_id);
+
+CREATE TABLE IF NOT EXISTS rx_items (
+  id INTEGER PRIMARY KEY,
+  prescription_id INTEGER NOT NULL REFERENCES prescriptions(id),
+  product_id INTEGER NOT NULL REFERENCES products(id),
+  dose TEXT NOT NULL DEFAULT '',            -- e.g. 1 tablet
+  frequency TEXT NOT NULL DEFAULT '',       -- e.g. 3 times a day
+  duration TEXT NOT NULL DEFAULT '',        -- e.g. 7 days
+  instructions TEXT NOT NULL DEFAULT '',    -- e.g. after food
+  qty REAL NOT NULL,                        -- quantity prescribed (selling unit)
+  dispensed_qty REAL NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS dispensings (    -- each time medicines of a prescription were handed over
+  id INTEGER PRIMARY KEY,
+  prescription_id INTEGER NOT NULL REFERENCES prescriptions(id),
+  sale_id INTEGER NOT NULL REFERENCES sales(id),
+  pharmacist_id INTEGER NOT NULL REFERENCES users(id),
+  checked_by INTEGER REFERENCES users(id),  -- second person (controlled medicines)
+  at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+
+CREATE TABLE IF NOT EXISTS recalls (
+  id INTEGER PRIMARY KEY,
+  ref_no TEXT NOT NULL UNIQUE,
+  product_id INTEGER NOT NULL REFERENCES products(id),
+  batch_no TEXT NOT NULL,
+  source TEXT NOT NULL DEFAULT '',          -- EFDA, Manufacturer, Supplier
+  recall_class TEXT NOT NULL DEFAULT '',    -- Class I, II, III
+  reference TEXT NOT NULL DEFAULT '',
+  action TEXT NOT NULL DEFAULT '',          -- what must be done
+  date TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'Open',      -- Open, Closed
+  user_id INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+
+CREATE TABLE IF NOT EXISTS recall_contacts (  -- each attempt to tell a customer / patient about a recall
+  id INTEGER PRIMARY KEY,
+  recall_id INTEGER NOT NULL REFERENCES recalls(id),
+  sale_id INTEGER REFERENCES sales(id),
+  note TEXT NOT NULL,
+  user_id INTEGER REFERENCES users(id),
+  at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+
+CREATE TABLE IF NOT EXISTS disposals (      -- destruction of expired, damaged or recalled stock
+  id INTEGER PRIMARY KEY,
+  ref_no TEXT NOT NULL UNIQUE,
+  batch_id INTEGER NOT NULL REFERENCES stock_batches(id),
+  product_id INTEGER NOT NULL REFERENCES products(id),
+  qty REAL NOT NULL,
+  method TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  witness1 INTEGER NOT NULL REFERENCES users(id),
+  witness2 INTEGER NOT NULL REFERENCES users(id),
+  certificate TEXT NOT NULL DEFAULT '',     -- uploaded disposal certificate
+  date TEXT NOT NULL,
+  move_id INTEGER REFERENCES stock_moves(id),
+  user_id INTEGER REFERENCES users(id),
+  branch_id INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);

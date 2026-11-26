@@ -36,6 +36,13 @@
     ('inventory.batches', 'Stock batches (FIFO)', can('inventory'), ep.startswith('inventory.batch'), '', '🗂️'),
     ('inventory.movements', 'Stock movements', can('inventory'), ep == 'inventory.movements', '', '🔁'),
   ]),
+  ('Pharmacy', 'pharmacy', [
+    ('pharmacy.prescriptions', 'Prescriptions', pharmacy_on() and (can('pharmacy') or can('dispense')), ep.startswith('pharmacy.rx') or ep in ('pharmacy.prescriptions', 'pharmacy.label'), '', '💊'),
+    ('pharmacy.patients', 'Patients & prescribers', pharmacy_on() and (can('pharmacy') or can('dispense')), ep.startswith('pharmacy.patient') or ep == 'pharmacy.prescribers', '', '🧑‍⚕️'),
+    ('pharmacy.expiry', 'Expiry & batches', pharmacy_on() and can('inventory'), ep == 'pharmacy.expiry', '', '⏳'),
+    ('pharmacy.recalls', 'Recalls & disposals', pharmacy_on() and (can('adjust') or can('dispense')), ep.startswith('pharmacy.recall') or ep in ('pharmacy.disposals', 'pharmacy.dispose'), '', '⛔'),
+    ('pharmacy.controlled', 'Controlled register', pharmacy_on() and (can('dispense') or can('reports')), ep == 'pharmacy.controlled', '', '🔐'),
+  ]),
   ('Money & reports', 'money', [
     ('expenses.index', 'Expenses', can('expenses'), ep.startswith('expenses.'), '', '💸'),
     ('reports.daily', 'Daily report', can('reports'), ep == 'reports.daily', '', '📅'),
@@ -100,6 +107,7 @@ applyShut();
 <label for="navtoggle" class="scrim"></label>
 {% endif %}
 <div class="content">
+{% if g.user and rx_alerts and (rx_alerts.expired or rx_alerts.soon) %}<div class="lowbar">⏳ {% if rx_alerts.expired %}{{ rx_alerts.expired }} batch{{ 'es' if rx_alerts.expired != 1 }} expired and still in stock. {% endif %}{% if rx_alerts.soon %}{{ rx_alerts.soon }} batch{{ 'es' if rx_alerts.soon != 1 }} expire within {{ rx_alerts.days }} days. {% endif %}<a href="{{ url_for('pharmacy.expiry') }}">View</a></div>{% endif %}
 {% if g.user and low_stock %}<div class="lowbar">⚠ {{ low_stock }} product{{ 's' if low_stock != 1 }} at or below minimum stock. <a href="{{ url_for('inventory.index', low=1) }}">View</a></div>{% endif %}
 <main>
   {% for cat, msg in get_flashed_messages(with_categories=true) %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
@@ -110,7 +118,7 @@ applyShut();
 {% set topic = 'pos' if ep == 'sales.pos' else 'sales' if ep.startswith('sales.') else 'customers' if 'customer' in ep
    else 'suppliers' if 'supplier' in ep else 'purchases' if ep.startswith('purchases.') else 'products' if ep.startswith('products.')
    else 'adjust' if ep == 'inventory.adjust' else 'stocktake' if ep.startswith('inventory.stocktake') else 'transfers' if ep.startswith('inventory.transfer') else 'batches' if ep.startswith('inventory.batch') else 'inventory' if ep.startswith('inventory.')
-   else 'expenses' if ep.startswith('expenses.') else 'reports' if ep.startswith('reports.') else 'admin' if ep.startswith('admin.')
+   else 'pharmacy' if ep.startswith('pharmacy.') else 'expenses' if ep.startswith('expenses.') else 'reports' if ep.startswith('reports.') else 'admin' if ep.startswith('admin.')
    else 'dashboard' if ep.startswith('dash.') else 'start' %}
 <dialog id="help" aria-label="Help">
   <div class="helphead"><b>Help: user manual</b>

@@ -7,6 +7,9 @@
 <div><label>Role *</label><select name="role">{% for r in roles %}<option {{ 'selected' if (f.role or (u.role if u else 'Sales Attendant')) == r }}>{{ r }}</option>{% endfor %}</select></div>
 <div><label>{{ 'New password (leave empty to keep)' if u else 'Password * (6+ characters)' }}</label><input type="password" name="password" autocomplete="new-password" {{ '' if u else 'required' }}></div>
 <div><label><input type="checkbox" name="active" value="1" {{ 'checked' if (not u or u.active) }}> Active (can log in)</label></div>
+{% if setting('pharmacy') == '1' %}<div><label>Pharmacist licence no. <span class="muted">(needed to verify and dispense)</span></label><input name="licence_no" value="{{ f.licence_no if f.licence_no is defined else (u.licence_no if u else '') }}"></div>
+<div><label>Licence expiry date</label><input type="date" name="licence_expiry" value="{{ f.licence_expiry if f.licence_expiry is defined else (u.licence_expiry or '' if u else '') }}"></div>
+{% else %}{% if u %}<input type="hidden" name="licence_no" value="{{ u.licence_no }}"><input type="hidden" name="licence_expiry" value="{{ u.licence_expiry or '' }}">{% endif %}{% endif %}
 <div class="wide"><label>Works in these branches{{ ' *' }}</label>
   <div class="checks">{% for br in branches %}<label class="inline"><input type="checkbox" name="branch" value="{{ br.id }}" {{ 'checked' if br.id in mine }}> {{ br.name }}{% if not br.active %} (closed){% endif %}</label>{% endfor %}</div>
   <small class="muted">Administrators can work in every branch.</small></div>
