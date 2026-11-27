@@ -331,3 +331,13 @@ CREATE TABLE IF NOT EXISTS purchase_returns (
   branch_id INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
+
+-- Which reports each user opens most, and the ones they pinned to the top of the Reports page.
+CREATE TABLE IF NOT EXISTS report_use (
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  report_key TEXT NOT NULL,
+  uses INTEGER NOT NULL DEFAULT 0,
+  pinned INTEGER NOT NULL DEFAULT 0,
+  last_used TEXT,
+  PRIMARY KEY (user_id, report_key)
+);

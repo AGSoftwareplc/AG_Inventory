@@ -593,6 +593,30 @@ class ShopTest(unittest.TestCase):
         row = self.one("SELECT ps.stock FROM product_stock ps JOIN products p ON p.id=ps.product_id WHERE p.code='OLD'")
         self.assertEqual(row['stock'], 7)
 
+    def test_reports_page_by_category(self):
+        html = self.c.get('/reports/').get_data(as_text=True)
+        for cat in ['Sales', 'Purchases &amp; suppliers', 'Inventory', 'Stock movements', 'Customers &amp; credit', 'Money']:
+            self.assertIn(cat, html)
+        self.assertNotIn('data-cat="branch"', html)  # only one branch
+        self.assertNotIn('rcard rmine', html)
+        self.assertIn('rcards', self.c.get('/reports/?r=branch_sales').get_data(as_text=True))  # needs two branches: back to the page
+        html = self.c.get('/reports/?r=low').get_data(as_text=True)  # the report box lists its own category only
+        self.assertIn('Inventory report', html)
+        self.assertIn('Stocktaking differences', html)
+        self.assertNotIn('Sales by product', html)
+        self.c.get('/reports/?r=low')
+        self.post('/reports/pin', {'r': 'profit'}, once=False)
+        html = self.c.get('/reports/').get_data(as_text=True)
+        self.assertIn('Pinned and most used', html)
+        mine = html[html.index('rmine'):html.index('class="rcards"')]
+        self.assertIn('Profit summary', mine)
+        self.assertIn('Low stock', mine)  # opened twice
+        self.assertLess(mine.index('Profit summary'), mine.index('Low stock'))  # pinned first
+        self.post('/reports/pin', {'r': 'profit'}, once=False)  # unpin
+        self.assertEqual(self.one("SELECT pinned FROM report_use WHERE report_key='profit'")['pinned'], 0)
+        self.post('/admin/branches/new', {'code': 'BOLE', 'name': 'Bole shop', 'active': '1'}, once=False)
+        self.assertIn('data-cat="branch"', self.c.get('/reports/').get_data(as_text=True))
+
     def test_reports_and_dashboard_by_branch(self):
         p = self.stocked_product()  # 20 at Main
         self.post('/admin/branches/new', {'code': 'BOLE', 'name': 'Bole shop', 'active': '1'}, once=False)

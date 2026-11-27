@@ -313,3 +313,20 @@ body.loginpage main { position: relative; display: flex; flex-direction: column;
 .cart input.price { width: 95px; text-align: right; }
 .sumgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: .6rem; }
 .sumgrid .card { margin: 0; } .sumgrid table td { padding: .2rem .3rem; }
+
+/* Reports page: one card per category */
+.rsearch { flex: 0 1 320px; padding: .5rem .7rem; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
+.rcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: .8rem; align-items: start; }
+.rcard h2 { margin: 0 0 .2rem; font-size: 1.05rem; }
+.rcard > p { margin: 0 0 .5rem; }
+.rmine { margin-bottom: .8rem; border-left: 5px solid var(--brand); }
+.rmine .rlist { columns: 2 260px; }
+.rlist { list-style: none; margin: 0; padding: 0; }
+.rlist li { display: flex; align-items: center; gap: .4rem; padding: .3rem 0; border-top: 1px solid var(--line); break-inside: avoid; }
+.rlist li:first-child { border-top: 0; }
+.rlist li a { flex: 1; }
+.pinf { margin: 0; }
+button.pin, button.pin:hover { background: none; border: 0; padding: 0 .2rem; color: #9aa5b1; font-size: 1.1rem; cursor: pointer; line-height: 1; }
+button.pin.on, button.pin:hover { color: #eda100; }
+.small { font-size: .82rem; }
+.rmine .rlist li { border-top: 0; }

@@ -4,7 +4,7 @@ import zipfile
 from datetime import date, timedelta
 from xml.sax.saxutils import escape
 
-from flask import Blueprint, Response, g, render_template, request
+from flask import Blueprint, Response, g, redirect, render_template, request, url_for
 
 import core
 from core import ADMIN, branch_id, can, date_range, get_db, login_required, requires, setting, uses_starter_password
@@ -616,41 +616,56 @@ def r_serials(db, s, e, f):
             ('Branch', 'branch', T), ('Sold on', 'receipt_no', T), ('Registered', 'created_at', T)], rows
 
 
-REPORTS = {
-    'Inventory': [('stock', 'Current stock and valuation', r_stock), ('low', 'Low stock', r_low),
-                  ('batches', 'Stock batches (FIFO) and expiry', r_batches),
-                  ('serials', 'Serial numbers and their status', r_serials),
-                  ('moves', 'Stock movements', r_moves),
-                  ('writeoffs', 'Damaged / expired / lost', r_writeoffs),
-                  ('stocktake', 'Stocktaking differences', r_stocktake)],
-    'Sales': [('sales_period', 'Sales by day / week / month', r_sales_period),
-              ('sales_product', 'Sales by product', r_sales_product),
-              ('sales_category', 'Sales by category', r_sales_category),
-              ('sales_user', 'Sales by user', r_sales_user), ('returns', 'Returns', r_returns),
-              ('cancelled', 'Cancelled sales', r_cancelled),
-              ('sales_payment', 'Sales by payment status (paid / partly / unpaid)', r_sales_payment),
-              ('customer_payments', 'Customer payments (with TT No.)', r_customer_payments),
-              ('customer_balances', 'Outstanding customer balances', r_customer_balances),
-              ('batch_cogs', 'Cost of goods sold by batch (FIFO)', r_batch_cogs),
-              ('price_variation', 'Sold above / below the default price', r_price_variation),
-              ('price_variation_product', 'Price variation by product', r_price_variation_product),
-              ('sales_source', 'POS sales and manual sales', r_sales_source),
-              ('manual_sales', 'Manual sales (seller and who recorded them)', r_manual_sales)],
-    'Purchases': [('purch_history', 'Purchase history', r_purch_history),
-                  ('purch_supplier', 'Purchases by supplier', r_purch_supplier),
-                  ('purch_product', 'Purchases by product', r_purch_product),
-                  ('outstanding', 'Outstanding supplier payments', r_outstanding),
-                  ('supplier_balances', 'Outstanding supplier balances', r_supplier_balances),
-                  ('supplier_payments', 'Supplier payments (with TT No.)', r_supplier_payments),
-                  ('purchase_returns', 'Returns to suppliers', r_purchase_returns)],
-    'Financial': [('profit', 'Profit summary', r_profit), ('expenses', 'Expenses by category', r_expenses),
-                  ('expense_list', 'Expense list', r_expense_list),
-                  ('collections', 'Payment collection', r_collections)],
-    'Branches': [('branch_sales', 'Sales and profit by branch', r_branch_sales),
-                 ('branch_stock', 'Stock by branch', r_branch_stock)],
-}
-BY_BRANCH = {'branch_sales', 'branch_stock'}  # these compare all branches; the others follow the branch box
+# The Reports page shows one card per category. (key, icon, title, hint, [(report key, title, function)])
+CATEGORIES = [
+    ('sales', '🧾', 'Sales', 'What was sold, by whom and at what price',
+     [('sales_period', 'Sales by day / week / month', r_sales_period),
+      ('sales_product', 'Sales by product', r_sales_product),
+      ('sales_category', 'Sales by category', r_sales_category),
+      ('sales_user', 'Sales by user', r_sales_user),
+      ('sales_source', 'POS sales and manual sales', r_sales_source),
+      ('manual_sales', 'Manual sales (seller and who recorded them)', r_manual_sales),
+      ('returns', 'Returns', r_returns),
+      ('cancelled', 'Cancelled sales', r_cancelled),
+      ('price_variation', 'Sold above / below the default price', r_price_variation),
+      ('price_variation_product', 'Price variation by product', r_price_variation_product)]),
+    ('purchases', '📦', 'Purchases & suppliers', 'What was bought and what is owed to suppliers',
+     [('purch_history', 'Purchase history', r_purch_history),
+      ('purch_supplier', 'Purchases by supplier', r_purch_supplier),
+      ('purch_product', 'Purchases by product', r_purch_product),
+      ('purchase_returns', 'Returns to suppliers', r_purchase_returns),
+      ('outstanding', 'Outstanding supplier payments', r_outstanding),
+      ('supplier_balances', 'Outstanding supplier balances', r_supplier_balances),
+      ('supplier_payments', 'Supplier payments (with TT No.)', r_supplier_payments)]),
+    ('inventory', '📋', 'Inventory', 'What is on the shelf now and what it is worth',
+     [('stock', 'Current stock and valuation', r_stock),
+      ('low', 'Low stock', r_low),
+      ('stocktake', 'Stocktaking differences', r_stocktake),
+      ('serials', 'Serial numbers and their status', r_serials)]),
+    ('stock', '🔁', 'Stock movements', 'How stock came in, went out and changed',
+     [('moves', 'Stock movements', r_moves),
+      ('writeoffs', 'Damaged / expired / lost', r_writeoffs),
+      ('batches', 'Stock batches (FIFO) and expiry', r_batches)]),
+    ('customers', '👥', 'Customers & credit', 'Who paid, who still owes',
+     [('sales_payment', 'Sales by payment status (paid / partly / unpaid)', r_sales_payment),
+      ('customer_payments', 'Customer payments (with TT No.)', r_customer_payments),
+      ('customer_balances', 'Outstanding customer balances', r_customer_balances)]),
+    ('money', '💰', 'Money', 'Profit, costs, expenses and cash collected',
+     [('profit', 'Profit summary', r_profit),
+      ('batch_cogs', 'Cost of goods sold by batch (FIFO)', r_batch_cogs),
+      ('collections', 'Payment collection', r_collections),
+      ('expenses', 'Expenses by category', r_expenses),
+      ('expense_list', 'Expense list', r_expense_list)]),
+    ('branch', '📍', 'By branch', 'Your branches side by side',
+     [('branch_sales', 'Sales and profit by branch', r_branch_sales),
+      ('branch_stock', 'Stock by branch', r_branch_stock)]),
+]
+REPORTS = {title: items for _k, _i, title, _h, items in CATEGORIES}
+CATEGORY_OF = {k: c for c in CATEGORIES for k, _t, _f in c[4]}
+BY_BRANCH = {'branch_sales', 'branch_stock'}  # these compare the user's branches; the others follow the branch box
+DAILY = ('daily', 'Daily report (everything on one day)')  # its own page, shown first in Sales
 ALL = {k: (title, fn) for group in REPORTS.values() for k, title, fn in group}
+ALL_TITLES = [(k, t) for k, (t, _f) in ALL.items()] + [DAILY]
 
 
 def totals(cols, rows):
@@ -663,20 +678,45 @@ def totals(cols, rows):
     return out
 
 
+def shown_categories():
+    """Categories this user sees: By branch only when they work in two or more branches."""
+    return [c for c in CATEGORIES if c[0] != 'branch' or len(g.branches) > 1]
+
+
+def note_use(key):
+    get_db().execute("INSERT INTO report_use(user_id, report_key, uses, last_used) VALUES (?, ?, 1, datetime('now','localtime')) "
+                     "ON CONFLICT(user_id, report_key) DO UPDATE SET uses=uses+1, last_used=excluded.last_used",
+                     (g.user['id'], key))
+
+
+def my_reports():
+    """Pinned reports first, then the ones this user opens most (up to 6 in all)."""
+    rows = get_db().execute('SELECT report_key, pinned FROM report_use WHERE user_id=? AND (pinned=1 OR uses>=2) '
+                            'ORDER BY pinned DESC, uses DESC, last_used DESC', (g.user['id'],)).fetchall()
+    ok = {k for c in shown_categories() for k, _t, _f in c[4]} | {DAILY[0]}
+    out = [(r['report_key'], bool(r['pinned'])) for r in rows if r['report_key'] in ok]
+    return [x for x in out if x[1]] + [x for x in out if not x[1]][:max(0, 6 - sum(1 for x in out if x[1]))]
+
+
 @bp.route('/')
 @requires('reports')
 def index():
+    key = request.args.get('r', '')
+    if key not in ALL or (key in BY_BRANCH and len(g.branches) < 2):
+        cats = shown_categories()
+        titles = dict(ALL_TITLES)
+        pins = {k for k, pinned in my_reports() if pinned}
+        return render_template('reports_home.html', cats=cats, mine=my_reports(), titles=titles, pins=pins,
+                               daily=DAILY, cat_of={k: c[2] for k, c in CATEGORY_OF.items()})
     db = rdb()
-    key = request.args.get('r', 'stock')
-    if key not in ALL or (key in BY_BRANCH and g.user['role'] != ADMIN):
-        key = 'stock'
     start, end = date_range()
     f = {'category': request.args.get('category', type=int), 'product': request.args.get('product', type=int),
          'supplier': request.args.get('supplier', type=int), 'group': request.args.get('group', 'day')}
     title, fn = ALL[key]
     cols, rows = fn(db, start, end, f)
     tot = totals(cols, rows) if key != 'profit' else {}
-    where = 'All branches' if key in BY_BRANCH else branch_label()
+    where = ('All branches' if g.user['role'] == ADMIN else 'Your branches') if key in BY_BRANCH else branch_label()
+    note_use(key)
     if request.args.get('format') == 'xlsx':
         return xlsx_response(title, start, end, cols, rows, tot, where)
     lists = {
@@ -684,10 +724,24 @@ def index():
         'products': db.execute('SELECT id, code, name FROM products ORDER BY name').fetchall(),
         'sups': db.execute('SELECT id, name FROM suppliers ORDER BY name').fetchall(),
     }
-    return render_template('reports.html', groups=REPORTS, key=key, title=title, cols=cols, rows=rows,
+    pinned = get_db().execute('SELECT 1 FROM report_use WHERE user_id=? AND report_key=? AND pinned=1',
+                              (g.user['id'], key)).fetchone() is not None
+    return render_template('reports.html', cat=CATEGORY_OF[key], key=key, title=title, cols=cols, rows=rows,
                            tot=tot, start=start, end=end, f=f, branch_opts=[] if key in BY_BRANCH else branch_choice(),
-                           where=where if len(g.branches) > 1 else '', by_branch=BY_BRANCH,
-                           show_branch_reports=g.user['role'] == ADMIN and len(g.branches) > 1, **lists)
+                           where=where if len(g.branches) > 1 else '', by_branch=BY_BRANCH, pinned=pinned,
+                           daily=DAILY, **lists)
+
+
+@bp.route('/pin', methods=['POST'])
+@requires('reports')
+def pin():
+    """Pin or unpin a report at the top of the Reports page (for this user only)."""
+    key = request.form.get('r', '')
+    if key in ALL or key == DAILY[0]:
+        get_db().execute('INSERT INTO report_use(user_id, report_key, pinned) VALUES (?, ?, 1) '
+                         'ON CONFLICT(user_id, report_key) DO UPDATE SET pinned=1-pinned', (g.user['id'], key))
+    back = request.form.get('next', '')
+    return redirect(back if back.startswith('/reports') else url_for('reports.index'))
 
 
 # ---------------------------------------------------------------- daily transaction report (update section 8)
@@ -707,6 +761,7 @@ def daily():
     blocks = daily_blocks(db, start, end, fl)
     title = 'Daily transaction report'
     where = branch_label()
+    note_use(DAILY[0])
     if request.args.get('format') == 'xlsx':
         sub = f"{setting('shop_name')} | {where} | {start}{' to ' + end if end != start else ''} | amounts in {setting('currency')}"
         data = xlsx_blocks(title, sub, [(f'{sec} - {h}' if h else sec, c, r, tt) for sec, h, c, r, tt in blocks],

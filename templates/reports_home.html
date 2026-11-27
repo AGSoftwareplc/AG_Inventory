@@ -1,0 +1,43 @@
+{% extends 'base.html' %}{% block title %}Reports{% endblock %}
+{% macro star(k) %}<form method="post" action="{{ url_for('reports.pin') }}" class="pinf">{{ csrf() }}<input type="hidden" name="r" value="{{ k }}"><button class="pin {{ 'on' if k in pins }}" title="{{ 'Unpin' if k in pins else 'Pin to the top' }}" aria-label="{{ 'Unpin' if k in pins else 'Pin' }} {{ titles[k] }}">{{ '★' if k in pins else '☆' }}</button></form>{% endmacro %}
+{% macro link(k) %}<a href="{{ url_for('reports.daily') if k == daily[0] else url_for('reports.index', r=k) }}">{{ titles[k] }}</a>{% endmacro %}
+{% block content %}
+<div class="head"><h1>Reports</h1>
+  <input type="search" id="rsearch" class="rsearch" placeholder="Find a report…" autocomplete="off" autofocus aria-label="Find a report"></div>
+{% if mine %}<div class="card rcard rmine" data-cat="pinned">
+  <h2>★ Pinned and most used</h2>
+  <ul class="rlist">{% for k, p in mine %}<li data-t="{{ titles[k]|lower }} {{ (cat_of[k] if k in cat_of else 'sales')|lower }}">{{ link(k) }} <span class="muted small">{{ cat_of[k] if k in cat_of else 'Sales' }}</span>{{ star(k) }}</li>{% endfor %}</ul>
+</div>{% endif %}
+<div class="rcards">
+{% for ck, icon, ctitle, hint, items in cats %}<div class="card rcard" data-cat="{{ ck }}">
+  <h2><span aria-hidden="true">{{ icon }}</span> {{ ctitle }}</h2>
+  <p class="muted small">{{ hint }}</p>
+  <ul class="rlist">
+  {% if ck == 'sales' %}<li data-t="{{ daily[1]|lower }} sales"><a href="{{ url_for('reports.daily') }}"><b>{{ daily[1] }}</b></a>{{ star(daily[0]) }}</li>{% endif %}
+  {% for k, t, _f in items %}<li data-t="{{ t|lower }} {{ ctitle|lower }}">{{ link(k) }}{{ star(k) }}</li>{% endfor %}
+  </ul>
+</div>{% endfor %}
+</div>
+<p class="muted" id="rnone" hidden>No report matches. Try another word.</p>
+<script>
+(function () {
+  var box = document.getElementById('rsearch');
+  box.addEventListener('input', function () {
+    var q = box.value.trim().toLowerCase(), any = false;
+    document.querySelectorAll('.rcard').forEach(function (c) {
+      var shown = 0;
+      c.querySelectorAll('li').forEach(function (li) {
+        var ok = !q || li.dataset.t.indexOf(q) >= 0; li.hidden = !ok; if (ok) shown++;
+      });
+      c.hidden = q && (!shown || c.dataset.cat === 'pinned'); if (shown && !c.hidden) any = true;
+    });
+    document.getElementById('rnone').hidden = any || !q;
+  });
+  box.addEventListener('keydown', function (e) {  // Enter opens the first match
+    if (e.key !== 'Enter') return;
+    var a = document.querySelector('.rcard:not([hidden]) li:not([hidden]) a');
+    if (a) { e.preventDefault(); location.href = a.href; }
+  });
+})();
+</script>
+{% endblock %}
