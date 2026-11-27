@@ -55,7 +55,7 @@
 <div class="actions"><button>Save payment</button></div></form>
 {% endif %}
 {% if st in ('Partially Received','Received') and can('receive') %}
-<form method="post" class="card wide" action="{{ url_for('purchases.ret', pur_id=pur.id) }}">{{ csrf() }}{{ once() }}<h2 style="margin-top:0">Return to supplier</h2>
+<form method="post" class="card wide" action="{{ url_for('purchases.ret', pur_id=pur.id) }}">{{ csrf() }}{{ once() }}<h2 style="margin-top:0">Return to supplier <a href="#" class="muted noprint" style="font-size:.85rem;font-weight:400" onclick="openHelp('returns');return false">? How to</a></h2>
 <p class="muted">A return is its own transaction (number PR-…) linked to this purchase. Enter the quantity to send back on each line; at most what was received, not yet returned and still in stock from this purchase.</p>
 <div class="tablewrap"><table><tr><th>Product</th><th class="n">Can return</th><th class="n">Return qty</th><th>Reason *</th><th>Serial numbers</th></tr>
 {% for i in items if i.received_qty - i.returned_qty > 0.0005 %}<tr><td>{{ i.name }}</td><td class="n">{{ (i.received_qty - i.returned_qty)|qty }} {{ i.unit }}</td>

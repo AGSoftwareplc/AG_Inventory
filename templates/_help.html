@@ -16,6 +16,20 @@
 </ol>
 <p><b>The menu on the left</b> is in the order of daily work. It shows only what your role is allowed to do. On a phone, tap ☰ to open it. Each area has its own colour: <b style="color:#13795b">Selling</b> green, <b style="color:#c2410c">Buying</b> orange, <b style="color:#1d63b8">Stock</b> blue, <b style="color:#6d3fc8">Money &amp; reports</b> purple and <b style="color:#475569">Administration</b> grey. Click a group title to fold it open or shut. Click <b>«</b> next to the blue <b>Sell (POS)</b> button to show icons only (point at an icon to see its name), and <b>»</b> to widen it again. The menu remembers your choice.</p>
 <p><b>The top bar</b> shows the business logo and name (set them in <b>⚙ Admin → Business profile &amp; backup</b>; until a logo is uploaded, the initials of the name are shown), the branch you are working in (📍), <b>⚙ Admin</b> for administrators, <b>? Help</b>, <b>Password</b> and <b>Log out</b>.</p>
+<p><b>Where to find things:</b></p>
+<table class="helpfind">
+  <tr><td>Sell</td><td><b>Sell (POS)</b> (blue button at the top of the menu)</td></tr>
+  <tr><td>Customer brings goods back</td><td><b>Selling → Sales history</b> → open the sale → <i>Customer return</i> (see <i>Returns</i>)</td></tr>
+  <tr><td>Send goods back to a supplier</td><td><b>Buying → Purchases &amp; receiving</b> → open the purchase → <i>Return to supplier</i> (see <i>Returns</i>)</td></tr>
+  <tr><td>Customer pays a credit sale</td><td><b>Selling → Sales history</b> → open the sale → <i>Receive a payment</i></td></tr>
+  <tr><td>Pay a supplier</td><td><b>Buying → Purchases &amp; receiving</b> → open the purchase → <i>Record payment to supplier</i></td></tr>
+  <tr><td>Sale made on paper</td><td><b>Selling → Manual sale</b></td></tr>
+  <tr><td>Damaged, expired or lost goods</td><td><b>Stock → Adjust stock → − Remove stock</b></td></tr>
+  <tr><td>Many products from Excel</td><td><b>Stock → Products → ⬆ Import from Excel</b></td></tr>
+  <tr><td>Everything that happened today</td><td><b>Money &amp; reports → Daily report</b></td></tr>
+  <tr><td>Any other report</td><td><b>Money &amp; reports → Reports</b>, then type in <i>Find a report</i></td></tr>
+</table>
+<p><b>Typing numbers:</b> commas for thousands appear by themselves while you type an amount or a quantity, for example <i>12500</i> shows as <i>12,500</i>. Type a dot for decimals, for example <i>2.5</i>. You don't need to type the commas yourself, but it does no harm if you do.</p>
 <p><b>Help:</b> click <b>? Help</b> or press <b>F1</b> on any page to read about that page. <b>Open full manual / print</b> shows the whole manual on one page.</p>
 </section>
 
@@ -45,13 +59,42 @@
   <li><b>Receive a payment</b> (credit sale): open the sale, enter the amount (part payments are fine), the method, the TT No. if there is one and the date, then click <b>Save payment</b>. The balance owed goes down. A payment never creates a new sale or changes stock.</li>
   <li><b>Payment history:</b> the sale page lists every payment with its date, method, TT No. and who received it.</li>
   <li><b>Batches used:</b> users who can see profit also see which stock batches the sale used and their cost.</li>
-  <li><b>Customer return:</b> open the sale, choose the item and quantity, and enter a reason. The items go back into stock, into the same batch they came from. The refund is the item's price after its share of any discount. The screen tells you how much cash to give back.</li>
+  <li><b>Customer return:</b> open the sale and use the <i>Customer return</i> box under it. See <i>Returns</i> for the steps.</li>
   <li><b>Cancel a sale</b> (managers only): open the sale, enter a reason and click <b>Cancel sale</b>. All items go back into stock. A sale that already has returns can't be cancelled.</li>
   <li><b>Reprint a receipt:</b> open the sale and click <b>Receipt</b>.</li>
   <li><b>Manual sale</b> (roles with <i>Record manual sales</i>): <b>Selling → Manual sale</b> records a sale made outside the app, for example on paper. Enter the real date, who actually sold, the products, prices and payment. Say whether the stock must be deducted now (FIFO) or <i>was already taken out</i>, so it is never deducted twice. A manual sale gets an <b>M</b> receipt number, a purple <i>Manual</i> label, and keeps both the seller and the person who recorded it. Use <i>Recorded</i> in Sales history to show only POS or only manual sales.</li>
-  <li><b>Serial numbers:</b> to return a serial-numbered item, type its serial number in the return form.</li>
 </ul>
 <p>Sales are never deleted. Every correction is recorded with the user and the reason.</p>
+</section>
+
+<section id="help-returns" data-title="Returns (customer and supplier)">
+<h2>Returns</h2>
+<p>There is no separate Returns page. A return is always made <b>from the document it belongs to</b>: the sale for a customer return, the purchase for a return to a supplier. This keeps the return linked to the right prices, costs and stock batch.</p>
+<h3>A customer brings goods back</h3>
+<ol>
+  <li>Go to <b>Selling → Sales history</b>. Find the sale by date, receipt number, customer name or TT No. (the number on the customer's receipt is the quickest). Click the receipt number.</li>
+  <li>Under the sale, in the <b>Customer return</b> box, choose the item, type the quantity coming back and the reason, for example <i>Wrong size</i> or <i>Damaged</i>. For a serial-numbered item, type its serial number.</li>
+  <li>Click <b>Record return</b>. The screen tells you how much money to give back.</li>
+</ol>
+<ul>
+  <li>The goods go back into stock, into the same batch they came from. The refund is the price paid, after the item's share of any discount.</li>
+  <li>You can return part of a line, and return again later, up to the quantity sold. The sale page lists every return with the date, reason and who did it.</li>
+  <li>If the <i>Customer return</i> box is missing, your role doesn't have the <i>Process customer returns</i> permission. Ask the administrator.</li>
+  <li>To take back a <b>whole sale</b>, for example one rung up by mistake, a manager can use <b>Cancel sale</b> on the same page instead.</li>
+</ul>
+<h3>Sending goods back to a supplier</h3>
+<ol>
+  <li>Go to <b>Buying → Purchases &amp; receiving</b> and click the purchase the goods came on. It must be confirmed (in stock).</li>
+  <li>In the <b>Return to supplier</b> box, type the quantity to send back and a reason on each line. For serial-numbered products, type the serial numbers.</li>
+  <li>Click <b>Record return</b>. The return gets its own number (PR-…), linked to the purchase.</li>
+</ol>
+<ul>
+  <li>The goods leave stock from the batch this purchase brought in, and the amount owed to the supplier goes down by their cost.</li>
+  <li>You can't send back more than was received, not yet returned and still in stock from this purchase.</li>
+  <li>A <b>draft</b> purchase has nothing in stock yet: just edit it or cancel it.</li>
+</ul>
+<h3>Seeing the returns</h3>
+<p>In <b>Reports</b>: <i>Returns</i> (under Sales) lists customer returns, and <i>Returns to suppliers</i> (under Purchases &amp; suppliers) lists supplier returns. The <b>Daily report</b> shows both for the day.</p>
 </section>
 
 <section id="help-customers" data-title="Customers">
@@ -67,7 +110,7 @@
     <ul><li><b>Save as draft:</b> you can still change it, and stock isn't affected.</li>
         <li><b>Save and confirm (adds to stock):</b> this ends the purchase. Everything on it goes into stock at once; there is no separate receiving step. Each line becomes a <b>stock batch</b> with its date, quantity, cost and expiry date (see <i>Stock batches</i>).</li></ul></li>
   <li><b>Pay the supplier:</b> on the same page, use <i>Record payment to supplier</i>. Partial payments are fine: enter the amount, method, TT No. / reference and date. The balance owed and the payment status are shown.</li>
-  <li><b>Return to supplier:</b> a separate transaction after the purchase is confirmed. Open the purchase, enter the quantity to send back and a reason on each line (and the serial numbers for serial-numbered products), then click <b>Record return</b>. It gets its own number (PR-…) linked to the purchase. The goods leave the batch that this purchase brought in, so stock and the amount owed both go down. You can't return more than was received and is still in stock from this purchase.</li>
+  <li><b>Return to supplier:</b> open the purchase and use the <i>Return to supplier</i> box under it. It gets its own number (PR-…). See <i>Returns</i> for the steps.</li>
 </ol>
 <p><b>Cancel:</b> only a draft can be cancelled. Once confirmed, use a return.</p>
 <p>Purchases confirmed with an older version, before receiving became automatic, still show <i>Receive into stock</i>.</p>
@@ -212,6 +255,8 @@
 <section id="help-faq" data-title="Questions & problems">
 <h2>Questions and problems</h2>
 <dl>
+  <dt><b>Where is the return function?</b></dt>
+  <dd>On the sale or purchase itself. Customer return: <i>Selling → Sales history</i>, open the sale, <i>Customer return</i>. Return to supplier: <i>Buying → Purchases &amp; receiving</i>, open the purchase, <i>Return to supplier</i>. See <i>Returns</i>.</dd>
   <dt><b>Other computers or phones can't open the app.</b></dt>
   <dd>Use the address shown in the black start window, for example <code>http://192.168.1.10:5000</code>, on the same Wi-Fi. Allow Python through the Windows firewall for private networks. The start window must stay open.</dd>
   <dt><b>"Not enough stock" when selling.</b></dt>

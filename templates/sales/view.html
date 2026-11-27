@@ -36,7 +36,7 @@
 <div><label>Date</label><input type="date" name="date" value="{{ today }}"></div></div>
 <div class="actions"><button>Save payment</button></div></form>{% endif %}
 {% if can('returns') %}
-<form method="post" class="card" action="{{ url_for('sales.ret', sid=s.id) }}">{{ csrf() }}{{ once() }}<h2 style="margin-top:0">Customer return</h2>
+<form method="post" class="card" action="{{ url_for('sales.ret', sid=s.id) }}">{{ csrf() }}{{ once() }}<h2 style="margin-top:0">Customer return <a href="#" class="muted noprint" style="font-size:.85rem;font-weight:400" onclick="openHelp('returns');return false">? How to</a></h2>
 <div class="grid"><div class="wide"><label>Item</label><select name="item_id">{% for i in items if i.qty - i.returned_qty > 0.0005 %}<option value="{{ i.id }}">{{ i.name }} (up to {{ (i.qty - i.returned_qty)|qty }})</option>{% endfor %}</select></div>
 <div><label>Quantity</label><input name="qty" inputmode="decimal" required></div><div><label>Reason *</label><input name="reason" required></div>
 {% if items|selectattr('serials')|list %}<div class="wide"><label>Serial numbers of the returned items <span class="muted">(serial-numbered products)</span></label><input name="serials" class="serials"></div>{% endif %}</div>

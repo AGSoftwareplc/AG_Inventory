@@ -41,30 +41,38 @@ Keep the window open while the shop is working. The window shows the address tha
 | Sales Attendant | `cashier3` | `sales333` |
 | Inventory Manager | `storekeeper` | `store123` |
 
-**Change these passwords right away.** Each user sees a warning until they do. Then go to **⚙ Admin → Settings** to enter the shop name, address and phone.
+**Change these passwords right away.** Each user sees a warning until they do. Then go to **⚙ Admin → Business profile & backup** to enter the business name, address, phone and logo.
 
 ## Daily use
 
-The **side menu** follows the order of daily work: *Sell (POS)* and *Dashboard* first, then *Selling*, *Buying*, *Stock*, *Money & reports* and *Administration*. Each user sees only what their role allows. **Help** (top right, or the **F1** key) opens the user manual at the topic for the current page. The full manual can be printed from */manual*.
+The **side menu** follows the order of daily work: *Sell (POS)* and *Dashboard* first, then *Selling*, *Buying*, *Stock*, *Money & reports* and *Administration*. Each user sees only what their role allows. **Help** (top right, or the **F1** key) opens the user manual at the topic for the current page. The full manual can be printed from */manual*. Amount and quantity boxes add thousands commas by themselves while you type (12500 → 12,500).
 
 
 | Task | Where |
 |---|---|
 | Sell | **Sell (POS)**: scan a barcode or type a name and press Enter. Leave *Amount paid* empty for the exact amount, then **Complete sale**, then print the receipt (A4). |
 | Credit sale | In POS, choose a registered customer and enter the part they paid. Take later payments on the sale page. |
-| Customer return or cancellation | **Sales** → open the sale → *Customer return* or *Cancel sale*. |
-| Buy stock | **Purchases → New purchase** → *Save and confirm order*. When the goods arrive, open the purchase and click **Receive into stock**. Partial deliveries are fine. Record supplier payments and returns on the same page. |
-| Damaged, expired or lost stock | **Inventory → Adjust stock**. A reason is required. |
-| Physical count | **Inventory → Stocktake** → start → enter counts → **Post**. |
+| Customer return | **Selling → Sales history** → open the sale → *Customer return* box → **Record return**. The goods go back into stock and the screen shows the refund. |
+| Cancel a whole sale | Same sale page → *Cancel sale* (managers only). |
+| Credit sale payment | Open the sale → *Receive a payment*. Part payments are fine; add the TT No. for bank or mobile payments. |
+| Sale made on paper | **Selling → Manual sale**. Choose whether stock is deducted now or was already taken out. Receipt numbers start with M. |
+| Buy stock | **Buying → Purchases & receiving → New purchase** → *Save and confirm (adds to stock)*. Each line becomes a stock batch (FIFO) with its cost and expiry date. Record supplier payments on the same page. |
+| Return to supplier | Open the purchase → *Return to supplier* box → **Record return**. It gets its own number (PR-…); stock and the amount owed both go down. |
+| Many products at once | **Products → + Several products**, or **⬆ Import from Excel** (template, check, then import). |
+| Serial numbers | Tick *Track serial numbers* on the product; enter them when buying, pick or scan them when selling. |
+| Damaged, expired or lost stock | **Stock → Adjust stock → − Remove stock**. A reason is required. |
+| Physical count | **Stock → Stocktake** → start → enter counts → **Post**. |
 | Expenses | **Expenses**. To correct a wrong entry, use *Reverse* on it. Entries are never deleted. |
+| Daily report | **Money & reports → Daily report**: sales, payments, purchases, returns, stock and expenses for one day. |
 | Reports | **Reports**: one card per category (Sales, Purchases & suppliers, Inventory, Stock movements, Customers & credit, Money, By branch), a search box and your pinned / most used reports at the top. Choose a report and dates. **Excel** downloads a .xlsx file. For a PDF, click **Print / PDF** and choose *Save as PDF*. |
-| Users and rights | **Admin → Users** and **Admin → Role permissions**. |
+| Users and rights | **⚙ Admin → Users** and **⚙ Admin → Role permissions** (discounts, credit sales, price change at the POS, manual sales, see profit…). |
+| Branches and transfers | **⚙ Admin → Branches**, then **Stock → Transfers** to send stock between branches. |
 
 ## Backup and restore
 
 - The app copies the database to the `backups` folder automatically once a day and keeps the last 30 copies.
-- **Admin → Settings → Make and download a backup now** saves a copy. Keep copies on a USB stick or another computer.
-- **To restore:** go to **Admin → Settings → Restore** and choose a `.db` backup file. The app saves a copy of the current data first.
+- **⚙ Admin → Business profile & backup → Make and download a backup now** saves a copy. Keep copies on a USB stick or another computer.
+- **To restore:** go to **⚙ Admin → Business profile & backup → Restore** and choose a `.db` backup file. The app saves a copy of the current data first.
 - **Manual restore:** stop the app, replace `data/shop.db` with the backup file, then start the app again.
 - A backup covers the business you are logged in to. Each business has its own data file in `data/` (`shop.db` for the first one, `biz-2.db` and so on), plus `platform.db` with the list of businesses.
 
@@ -74,7 +82,7 @@ To move the system to another PC, copy the whole folder, including `data/`, and 
 
 ## How the money and stock rules work
 
-- **Stock** changes only on purchase receiving, sales, returns, cancellations, adjustments and stocktakes. Each change is recorded in *Inventory → Movements* with the user and a reference.
+- **Stock** changes only on confirmed purchases, supplier returns, sales, transfers, returns, cancellations, adjustments and stocktakes. Each change is recorded in *Stock → Stock movements* with the user and a reference.
 - **Product cost** uses FIFO stock batches: each delivery is a batch with its own cost, sales take from the batch that expires first, then the oldest, and the cost of goods sold is the cost of the batches used. A purchase discount is spread over the purchase lines.
 - **Each sale line** stores its selling price and cost, so later price changes don't alter history.
 - **Gross profit** = net sales (after discounts and returns) − cost of goods sold.
