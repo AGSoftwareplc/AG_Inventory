@@ -1,9 +1,10 @@
 {% extends 'base.html' %}{% from '_table.html' import report_table %}{% block title %}{{ title }}{% endblock %}
 {% block content %}
-<div class="head noprint"><h1>Reports</h1></div>
+<div class="head noprint"><div><a href="{{ url_for('reports.index') }}">Reports</a> › {{ cat[2] }}<h1>{{ title }}</h1></div>
+  <form method="post" action="{{ url_for('reports.pin') }}">{{ csrf() }}<input type="hidden" name="r" value="{{ key }}"><input type="hidden" name="next" value="{{ request.full_path }}"><button class="light">{{ '★ Pinned' if pinned else '☆ Pin to the top' }}</button></form></div>
 <form class="filters" id="rf">
-  <div class="grow"><label>Report</label><select name="r" onchange="this.form.submit()">
-  {% for g, items in groups.items() if g != 'Branches' or show_branch_reports %}<optgroup label="{{ g }}">{% for k, t, _f in items %}<option value="{{ k }}" {{ 'selected' if k == key }}>{{ t }}</option>{% endfor %}</optgroup>{% endfor %}</select></div>
+  <div class="grow"><label>{{ cat[2] }} report</label><select name="r" onchange="this.form.submit()">
+  {% for k, t, _f in cat[4] %}<option value="{{ k }}" {{ 'selected' if k == key }}>{{ t }}</option>{% endfor %}</select></div>
   {% if branch_opts %}<div><label>Branch</label><select name="branch">{% for v, label, sel in branch_opts %}<option value="{{ v }}" {{ 'selected' if sel }}>{{ label }}</option>{% endfor %}</select></div>{% endif %}
   {% if key not in ('stock','low','customer_balances','outstanding','branch_stock','serials') %}{% include '_range.html' %}{% endif %}
   {% if key == 'sales_period' %}<div><label>Group by</label><select name="group">{% for v in ['day','week','month'] %}<option {{ 'selected' if f.group == v }}>{{ v }}</option>{% endfor %}</select></div>{% endif %}

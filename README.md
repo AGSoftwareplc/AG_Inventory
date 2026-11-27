@@ -57,7 +57,7 @@ The **side menu** follows the order of daily work: *Sell (POS)* and *Dashboard* 
 | Damaged, expired or lost stock | **Inventory → Adjust stock**. A reason is required. |
 | Physical count | **Inventory → Stocktake** → start → enter counts → **Post**. |
 | Expenses | **Expenses**. To correct a wrong entry, use *Reverse* on it. Entries are never deleted. |
-| Reports | **Reports**: choose a report and dates. **Excel** downloads a .xlsx file. For a PDF, click **Print / PDF** and choose *Save as PDF*. |
+| Reports | **Reports**: one card per category (Sales, Purchases & suppliers, Inventory, Stock movements, Customers & credit, Money, By branch), a search box and your pinned / most used reports at the top. Choose a report and dates. **Excel** downloads a .xlsx file. For a PDF, click **Print / PDF** and choose *Save as PDF*. |
 | Users and rights | **Admin → Users** and **Admin → Role permissions**. |
 
 ## Backup and restore
