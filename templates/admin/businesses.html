@@ -4,7 +4,7 @@
 <p class="muted">As Super Admin you manage the businesses on this computer. Each business has its own data file, profile, logo, branches and users, and cannot see the others. Its own administrator runs it day to day.</p>
 <div class="card tablewrap" style="padding:0"><table><tr><th>Code</th><th>Name</th><th>Data file</th><th class="n">Branches</th><th class="n">Users</th><th>Created</th><th>Status</th><th></th></tr>
 {% for b in rows %}<tr><td>{{ b.code }}</td><td>{{ b.name }}{% if b.id == g.business.id %} <span class="badge">yours</span>{% endif %}</td><td><code>{{ b.db_file }}</code></td>
-<td class="n">{{ b.branches }}</td><td class="n">{{ b.users }}</td><td>{{ b.created_at[:10] }}</td>
+<td class="n">{{ b.branches|num }}</td><td class="n">{{ b.users|num }}</td><td>{{ b.created_at[:10] }}</td>
 <td><span class="badge {{ 'ok' if b.active else 'err' }}">{{ 'Active' if b.active else 'Closed' }}</span></td>
 <td>{% if b.id != g.business.id %}<form method="post" style="margin:0">{{ csrf() }}<button name="toggle" value="{{ b.id }}" class="light small">{{ 'Close' if b.active else 'Reopen' }}</button></form>{% endif %}</td></tr>{% endfor %}</table></div>
 <h2>Add a business</h2>

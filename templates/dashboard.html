@@ -46,7 +46,7 @@
     <text x="{{ t.L - 6 }}" y="{{ gl.y + 4 }}" text-anchor="end" class="ax">{{ gl.label }}</text>{% endfor %}
     {% for b in t.bars %}<g class="bar"><rect class="hit" x="{{ b.cx - 15 }}" y="0" width="30" height="{{ t.B }}"/>
       {% if b.h > 0 %}<path class="s1" d="M{{ '%.1f'|format(b.x) }} {{ t.B }}V{{ '%.1f'|format(b.y + [3, b.h]|min) }}q0 -{{ [3, b.h]|min }} {{ [3, b.h]|min }} -{{ [3, b.h]|min }}H{{ '%.1f'|format(b.x + b.w - [3, b.h]|min) }}q{{ [3, b.h]|min }} 0 {{ [3, b.h]|min }} {{ [3, b.h]|min }}V{{ t.B }}Z"/>{% endif %}
-      <title>{{ b.label }}: {{ b.v|money if show_money else b.v ~ ' sales' }}</title>
+      <title>{{ b.label }}: {{ b.v|money if show_money else b.v|num ~ ' sales' }}</title>
       {% if b.tick %}<text x="{{ '%.1f'|format(b.cx) }}" y="{{ t.B + 18 }}" text-anchor="middle" class="ax">{{ b.tick }}</text>{% endif %}</g>{% endfor %}
   </svg></div>
   {% if t.empty %}<p class="muted" style="margin:0">No sales in this period yet.</p>{% else %}<p class="muted hint">Point at a bar to see the amount.</p>{% endif %}

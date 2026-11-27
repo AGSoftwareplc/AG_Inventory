@@ -70,7 +70,7 @@
           '<datalist id="snl' + i + '">' + (l.avail || []).filter(function (x) { return l.serials.indexOf(x) < 0; })
             .map(function (x) { return '<option value="' + esc(x) + '">'; }).join('') + '</datalist></span>';
       }
-      var price = POS.price ? '<input class="price" data-p="' + i + '" value="' + (l.price / 100).toFixed(2) + '" inputmode="decimal">' +
+      var price = POS.price ? '<input class="price" data-p="' + i + '" value="' + money(l.price) + '" inputmode="decimal">' +
         (l.price !== l.def ? '<div class="' + (l.price > l.def ? 'vpos' : 'vneg') + '" style="font-size:.8rem">' +
           (l.price > l.def ? '+' : '−') + money(Math.abs(l.price - l.def)) + ' vs ' + money(l.def) + '</div>' : '') : money(l.price);
       var q = l.sn ? '<b>' + l.qty + '</b> ' + esc(l.unit) :
@@ -184,7 +184,7 @@
     cart = cart.filter(function (l) { return l.qty > 0; });
     if (!cart.length) { e.preventDefault(); alert('The cart is empty.'); return; }
     var grand = totals();
-    if ($('tendered').value === '') $('tendered').value = (grand / 100).toFixed(2);
+    if ($('tendered').value === '') $('tendered').value = money(grand);
     if (Math.round(num($('tendered').value) * 100) < grand && !$('credit_ok').value) {
       e.preventDefault();
       alert('You are not allowed to sell on credit. The full amount must be paid.');

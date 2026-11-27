@@ -903,6 +903,15 @@ def xlsx_blocks(title, subtitle, blocks, sheet_name='Report'):
         lines.append(f'<row r="{r}">{cells}</row>')
         r += 1
 
+    def nstyle(kind, v, bold):
+        """Cell style with thousands commas: money 1,234.50; counts and quantities 1,234 or 1,234.5."""
+        if kind in MONEY:
+            return 3 if bold else 2
+        if kind in (Q, N) and isinstance(v, (int, float)) and not isinstance(v, bool):
+            whole = float(v).is_integer()
+            return (5 if bold else 4) if whole else (7 if bold else 6)
+        return 1 if bold else 0
+
     def conv(v, kind):
         if v is None:
             return None
@@ -924,10 +933,11 @@ def xlsx_blocks(title, subtitle, blocks, sheet_name='Report'):
             row([heading], lambda i: 1)
         row([c[0] for c in cols], lambda i: 1)
         for rr in rows:
-            row([conv(rr[k], kind) for _l, k, kind in cols], lambda i, cols=cols: 2 if cols[i][2] in MONEY else 0)
+            vals = [conv(rr[k], kind) for _l, k, kind in cols]
+            row(vals, lambda i, cols=cols, vals=vals: nstyle(cols[i][2], vals[i], False))
         if tot:
-            row(['Total'] + [conv(tot[k], kind) if k in tot else '' for _l, k, kind in cols[1:]],
-                lambda i, cols=cols: 3 if cols[i][2] in MONEY else 1)
+            vals = ['Total'] + [conv(tot[k], kind) if k in tot else '' for _l, k, kind in cols[1:]]
+            row(vals, lambda i, cols=cols, vals=vals: nstyle(cols[i][2], vals[i], True) if i else 1)
         if len(blocks) > 1:
             r += 1
         for i, c in enumerate(cols):
@@ -939,13 +949,16 @@ def xlsx_blocks(title, subtitle, blocks, sheet_name='Report'):
              f'<cols>{widths}</cols><sheetData>{"".join(lines)}</sheetData></worksheet>')
     styles = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
               '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+              '<numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0.###"/></numFmts>'
               '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font>'
               '<font><b/><sz val="11"/><name val="Calibri"/></font></fonts>'
               '<fills count="2"><fill><patternFill patternType="none"/></fill>'
               '<fill><patternFill patternType="gray125"/></fill></fills>'
               '<borders count="1"><border/></borders><cellStyleXfs count="1"><xf/></cellStyleXfs>'
-              '<cellXfs count="4"><xf/><xf fontId="1" applyFont="1"/>'
+              '<cellXfs count="8"><xf/><xf fontId="1" applyFont="1"/>'
               '<xf numFmtId="4" applyNumberFormat="1"/><xf numFmtId="4" fontId="1" applyNumberFormat="1" applyFont="1"/>'
+              '<xf numFmtId="3" applyNumberFormat="1"/><xf numFmtId="3" fontId="1" applyNumberFormat="1" applyFont="1"/>'
+              '<xf numFmtId="164" applyNumberFormat="1"/><xf numFmtId="164" fontId="1" applyNumberFormat="1" applyFont="1"/>'
               '</cellXfs></styleSheet>')
     files = {
         '[Content_Types].xml': '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'

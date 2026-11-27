@@ -4,6 +4,6 @@
 <p class="muted">Each branch keeps its own stock, sales, purchases and expenses. Products, customers, suppliers and users are shared by the whole business. Users work in the branches ticked on their user page.</p>
 <div class="card tablewrap" style="padding:0"><table><tr><th>Code</th><th>Name</th><th>Address</th><th>Phone</th><th class="n">Users</th><th class="n">Sales</th><th>Status</th></tr>
 {% for b in rows %}<tr><td><a href="{{ url_for('admin.branch_edit', bid=b.id) }}">{{ b.code }}</a></td><td>{{ b.name }}{% if b.id == 1 %} <span class="badge">main</span>{% endif %}</td>
-<td>{{ b.address }}</td><td>{{ b.phone }}</td><td class="n">{{ b.users }}</td><td class="n">{{ b.sales }}</td>
+<td>{{ b.address }}</td><td>{{ b.phone }}</td><td class="n">{{ b.users|num }}</td><td class="n">{{ b.sales|num }}</td>
 <td><span class="badge {{ 'ok' if b.active else 'err' }}">{{ 'Active' if b.active else 'Closed' }}</span></td></tr>{% endfor %}</table></div>
 {% endblock %}

@@ -1,5 +1,5 @@
 {# One report table. cols = [(label, key, kind)], kind: text|money|signed|qty|num. A row with _url links its reference. #}
-{% macro cell(v, kind) %}{% if v is none %}{% elif kind == 'money' %}{{ v|money }}{% elif kind == 'signed' %}{{ v|signed }}{% elif kind == 'qty' %}{{ v|qty if v is not none }}{% elif kind == 'num' %}{{ '{:,}'.format(v) if v is number else (v if v is not none) }}{% else %}{{ v if v is not none }}{% endif %}{% endmacro %}
+{% macro cell(v, kind) %}{% if v is none %}{% elif kind == 'money' %}{{ v|money }}{% elif kind == 'signed' %}{{ v|signed }}{% elif kind == 'qty' %}{{ v|qty if v is not none }}{% elif kind == 'num' %}{{ v|num }}{% else %}{{ v if v is not none }}{% endif %}{% endmacro %}
 {% macro report_table(cols, rows, tot={}, empty='No data for this selection.') %}
 <div class="tablewrap"><table>
   <tr>{% for l, k, kind in cols %}<th class="{{ 'n' if kind != 'text' }}">{{ l }}</th>{% endfor %}</tr>
