@@ -5,7 +5,7 @@
 <p class="muted">Transfers sent from or to <b>{{ g.branch.name if g.branch else 'this branch' }}</b>. Stock leaves the sending branch when sent and arrives when the other branch receives it.</p>
 <div class="card tablewrap" style="padding:0"><table><tr><th>No.</th><th>Date</th><th>From</th><th>To</th><th class="n">Lines</th><th class="n">Value at cost</th><th>Status</th><th>By</th></tr>
 {% for t in rows %}<tr><td><a href="{{ url_for('inventory.transfer', tid=t.id) }}">{{ t.ref_no }}</a></td><td>{{ t.date }}</td><td>{{ t.from_name }}</td><td>{{ t.to_name }}</td>
-<td class="n">{{ t.n }}</td><td class="n">{{ t.value|money }}</td>
+<td class="n">{{ t.n|num }}</td><td class="n">{{ t.value|money }}</td>
 <td><span class="badge {{ 'ok' if t.status == 'Received' else 'err' if t.status == 'Cancelled' else 'warn' }}">{{ t.status }}{% if t.status == 'In transit' and t.to_branch == g.branch.id %}: receive it{% endif %}</span></td><td>{{ t.username }}</td></tr>
 {% else %}<tr><td colspan="8" class="muted">No transfers yet.</td></tr>{% endfor %}</table></div>
 {% endblock %}

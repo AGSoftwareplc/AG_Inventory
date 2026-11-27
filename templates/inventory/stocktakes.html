@@ -6,7 +6,7 @@
   <div class="grow"><label>Notes</label><input name="notes" placeholder="e.g. Month-end count"></div>
   <div style="flex:0"><button>Start new count</button></div></form>
 <div class="card tablewrap" style="padding:0"><table><tr><th>No.</th><th>Date</th><th>Notes</th><th class="n">Products</th><th>Status</th><th>By</th></tr>
-{% for s in rows %}<tr><td><a href="{{ url_for('inventory.stocktake', st_id=s.id) }}">ST-{{ s.id }}</a></td><td>{{ s.date }}</td><td>{{ s.notes }}</td><td class="n">{{ s.n }}</td>
+{% for s in rows %}<tr><td><a href="{{ url_for('inventory.stocktake', st_id=s.id) }}">ST-{{ s.id }}</a></td><td>{{ s.date }}</td><td>{{ s.notes }}</td><td class="n">{{ s.n|num }}</td>
 <td><span class="badge {{ 'ok' if s.status == 'Posted' else 'warn' }}">{{ s.status }}</span></td><td>{{ s.username }}</td></tr>
 {% else %}<tr><td colspan="6" class="muted">No stocktakes yet.</td></tr>{% endfor %}</table></div>
 {% endblock %}

@@ -302,6 +302,19 @@ class ShopTest(unittest.TestCase):
         self.assertEqual(r.status_code, 400)
 
     # ---------------------------------------------------------------- AC-009, AC-010, AC-013
+    def test_thousands_commas(self):
+        self.assertEqual(core.fmt_num(1234567), '1,234,567')
+        self.assertEqual(core.fmt_num(1234.5), '1,234.5')
+        self.assertEqual(core.fmt_num(999), '999')
+        self.assertEqual(core.fmt_qty(12345), '12,345')
+        self.assertEqual(core.fmt_money(123456789), '1,234,567.89')
+        p = self.product('BIG', price='1,500,000.00', opening='12,000')  # commas typed in boxes are accepted
+        self.assertEqual(p['price'], 150000000)
+        self.assertEqual(p['stock'], 12000)
+        html = self.c.get('/products/').get_data(as_text=True)
+        self.assertIn('1,500,000.00', html)
+        self.assertIn('12,000', html)
+
     def test_reports_and_excel_export(self):
         p = self.stocked_product()
         self.sell([(p['id'], 2)], tendered='300')
@@ -316,6 +329,9 @@ class ShopTest(unittest.TestCase):
         sheet = z.read('xl/worksheets/sheet1.xml').decode()
         self.assertIn('Item P1', sheet)
         self.assertIn('<v>300.0</v>', sheet)
+        styles = z.read('xl/styles.xml').decode()
+        self.assertIn('numFmtId="3"', styles)  # quantities and counts get thousands commas in Excel too
+        self.assertIn('#,##0.###', styles)
         for url in ['/', '/sales/', '/purchases/', '/inventory/', '/inventory/movements', '/products/',
                     '/suppliers', '/customers', '/expenses/', '/admin/settings', '/admin/roles', '/admin/audit',
                     '/sales/pos', f"/products/{p['id']}", '/purchases/1', '/sales/1']:

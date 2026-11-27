@@ -38,7 +38,7 @@
         list.forEach(function (b) {
           var o = document.createElement('option');
           o.value = b.id;
-          o.textContent = '#' + b.id + ' ' + b.ref_no + ', received ' + b.received + (b.expiry ? ', expires ' + b.expiry : '') + ', in stock ' + b.remaining;
+          o.textContent = '#' + b.id + ' ' + b.ref_no + ', received ' + b.received + (b.expiry ? ', expires ' + b.expiry : '') + ', in stock ' + (+b.remaining).toLocaleString('en-US', {maximumFractionDigits: 3});
           if (String(b.id) === sel.dataset.sel) o.selected = true;
           sel.appendChild(o);
         });

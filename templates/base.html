@@ -100,7 +100,7 @@ applyShut();
 <label for="navtoggle" class="scrim"></label>
 {% endif %}
 <div class="content">
-{% if g.user and low_stock %}<div class="lowbar">⚠ {{ low_stock }} product{{ 's' if low_stock != 1 }} at or below minimum stock. <a href="{{ url_for('inventory.index', low=1) }}">View</a></div>{% endif %}
+{% if g.user and low_stock %}<div class="lowbar">⚠ {{ low_stock|num }} product{{ 's' if low_stock != 1 }} at or below minimum stock. <a href="{{ url_for('inventory.index', low=1) }}">View</a></div>{% endif %}
 <main>
   {% for cat, msg in get_flashed_messages(with_categories=true) %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
   {% block content %}{% endblock %}
@@ -138,6 +138,31 @@ function openHelp(topic) {
   if (!d.open) d.showModal();
 }
 document.addEventListener('keydown', function (e) { if (e.key === 'F1') { e.preventDefault(); openHelp(); } });
+// Thousands commas in amount and quantity boxes while typing (1234567 -> 1,234,567). The server ignores the commas.
+(function () {
+  function grouped(v) {
+    if (!/^-?[\d,]*\.?\d*$/.test(v)) return v;  // not a plain number: leave it as typed
+    var neg = v.charAt(0) === '-' ? '-' : '', s = v.replace(/[-,]/g, ''), dot = s.indexOf('.');
+    var ip = dot < 0 ? s : s.slice(0, dot), fp = dot < 0 ? '' : s.slice(dot);
+    if (ip.length > 1) ip = ip.replace(/^0+(?=\d)/, '');
+    return neg + ip.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + fp;
+  }
+  function apply(el, keepCaret) {
+    var v = el.value, nv = grouped(v);
+    if (nv === v) return;
+    var pos = keepCaret ? el.selectionStart : null, left = 0;
+    if (pos != null) for (var i = 0; i < pos; i++) if (v.charAt(i) !== ',') left++;
+    el.value = nv;
+    if (pos == null) return;
+    var p = 0;
+    while (p < nv.length && left > 0) { if (nv.charAt(p) !== ',') left--; p++; }
+    try { el.setSelectionRange(p, p); } catch (err) {}
+  }
+  function isNum(el) { return el && el.tagName === 'INPUT' && el.getAttribute('inputmode') === 'decimal'; }
+  document.addEventListener('input', function (e) { if (isNum(e.target)) apply(e.target, true); }, true);
+  document.addEventListener('focusout', function (e) { if (isNum(e.target)) apply(e.target, false); });
+  document.querySelectorAll('input[inputmode=decimal]').forEach(function (el) { apply(el, false); });
+})();
 </script>
 {% endif %}
 {% block scripts %}{% endblock %}

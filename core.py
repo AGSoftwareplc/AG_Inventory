@@ -567,6 +567,13 @@ def fmt_qty(q):
     return f'{q:,.3f}'.rstrip('0').rstrip('.') if q != int(q) else f'{int(q):,}'
 
 
+def fmt_num(v):
+    """A count with thousands commas: 1234567 -> '1,234,567'. Text is returned unchanged."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return '' if v is None else v
+    return fmt_qty(v)
+
+
 def money_input(cents):
     """Value for an <input> (no thousands separator)."""
     return fmt_money(cents).replace(',', '')
